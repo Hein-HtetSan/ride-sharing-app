@@ -20,11 +20,22 @@ This project is a full-stack ride sharing application with:
 
 1. **Clone the repository:**
    ```sh
-   git clone <your-repo-url>
+   git clone https://github.com/Hein-HtetSan/ride-sharing-app.git
    cd ride-sharing-app
    ```
 
-2. **Build and start all services:**
+2. **Build and star all services (Development):**
+   ```sh
+   docker-compose -f docker-compose.dev.yml up --build
+   ```
+   This will build and start:
+   - PostgreSQL database
+   - RMI server
+   - Spring Boot API
+   - React frontend (served by Vite)
+   - Nginx reverse proxy
+
+3. **Build and start all services (Production):**
    ```sh
    docker-compose up --build
    ```

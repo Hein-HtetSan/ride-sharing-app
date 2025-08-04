@@ -27,12 +27,6 @@ This project is a Java Spring Boot API that communicates with RMI services for u
    ```
    The API will start on `http://localhost:8080`.
 
-## 3. Test the RMI Clients (Optional)
-- To run a sample RMI client, use the provided batch scripts, e.g.:
-  ```
-  scripts\clients\start-user-client.bat
-  scripts\clients\start-location-client.bat
-  ```
 
 ## 3. Access Swagger UI
 - Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) in your browser to explore the API.

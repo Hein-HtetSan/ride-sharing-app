@@ -57,11 +57,6 @@
 			<artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
 			<version>2.5.0</version>
 		</dependency>
-		<!-- Spring RMI support -->
-		<dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-context-support</artifactId>
-		</dependency>
 	</dependencies>
 
 	<build>

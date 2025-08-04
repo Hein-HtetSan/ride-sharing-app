@@ -36,7 +36,8 @@ services:
     networks:
       - ride-sharing-network
     volumes:
-      - ./rmi/src:/app/src
+      - ./rmi:/app
+    command: ./scripts/start-server.sh
     restart: unless-stopped
 
   # Spring Boot API
@@ -55,7 +56,8 @@ services:
     networks:
       - ride-sharing-network
     volumes:
-      - ./api/src:/app/src
+      - ./api:/app
+    command: ./mvnw spring-boot:run
     restart: unless-stopped
 
   # React Web Frontend
@@ -66,11 +68,13 @@ services:
     container_name: ride-sharing-web-dev
     environment:
       REACT_APP_API_URL: http://localhost:8080
+      CHOKIDAR_USEPOLLING: "true"
     ports:
       - "3000:3000"
     volumes:
-      - ./web/src:/app/src
-      - ./web/public:/app/public
+      - ./web:/app
+      - /app/node_modules
+    command: npm run dev
     networks:
       - ride-sharing-network
 
