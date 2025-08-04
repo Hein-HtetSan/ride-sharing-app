@@ -1,0 +1,75 @@
+# Node
+node_modules/
+web/node_modules/
+web/dist/
+web/.env
+
+# Java
+*.class
+*.jar
+!rmi/lib/*.jar
+*.war
+*.iml
+api/target/
+rmi/build/
+rmi/target/
+
+# Maven
+api/.mvn/
+api/.idea/
+api/.classpath
+api/.project
+api/.settings/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Docker
+postgres_data/
+
+# Misc
+!.env.example
+!.env.*.example
+.env
+.env.*
+!web/.env.example
+*.local
+
+# Python (if any)
+__pycache__/
+*.pyc
+
+# Others
+*.bak
+*.tmp
+*.orig
+
+# Ignore database dumps
+*.sql
+
+# Ignore test output
+*.dumpstream
+*.xml
+*.txt
+
+# Ignore generated sources
+api/target/
+rmi/build/
+rmi/generated-sources/
+rmi/generated-test-sources/
+
+# Ignore coverage
+coverage/
+
+# Ignore SSL keys
+nginx/ssl/

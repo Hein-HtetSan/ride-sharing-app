@@ -1,0 +1,22 @@
+# Development Dockerfile for RMI Server
+FROM eclipse-temurin:21-jdk-alpine
+
+WORKDIR /app
+
+# Install Maven
+RUN apk add --no-cache maven
+
+# Copy POM file for dependency resolution
+COPY pom.xml .
+
+# Download dependencies
+RUN mvn dependency:resolve
+
+# Copy source code
+COPY src ./src
+
+# Expose RMI port
+EXPOSE 1099
+
+# Development command with auto-reload
+CMD ["mvn", "exec:java", "-Dexec.mainClass=com.rsrmi.ride_sharing_api.rmi.servers.RMIServer", "-Dexec.args=-Djava.rmi.server.hostname=0.0.0.0"]

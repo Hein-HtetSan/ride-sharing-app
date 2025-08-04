@@ -1,0 +1,82 @@
+# Docker Compose for Development
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:16-alpine
+    container_name: ride-sharing-db-dev
+    environment:
+      POSTGRES_DB: ride_sharing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - ride-sharing-network
+
+  # RMI Server
+  rmi-server:
+    build:
+      context: ./rmi
+      dockerfile: Dockerfile.dev
+    container_name: ride-sharing-rmi-dev
+    environment:
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: ride_sharing
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "1099:1099"
+    depends_on:
+      - database
+    networks:
+      - ride-sharing-network
+    volumes:
+      - ./rmi/src:/app/src
+    restart: unless-stopped
+
+  # Spring Boot API
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: ride-sharing-api-dev
+    environment:
+      RMI_HOST: rmi-server
+      RMI_PORT: 1099
+    ports:
+      - "8080:8080"
+    depends_on:
+      - rmi-server
+    networks:
+      - ride-sharing-network
+    volumes:
+      - ./api/src:/app/src
+    restart: unless-stopped
+
+  # React Web Frontend
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: ride-sharing-web-dev
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+    networks:
+      - ride-sharing-network
+
+volumes:
+  postgres_data_dev:
+
+networks:
+  ride-sharing-network:
+    driver: bridge

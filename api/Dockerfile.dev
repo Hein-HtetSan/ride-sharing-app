@@ -1,0 +1,22 @@
+# Development Dockerfile for Spring Boot API
+FROM eclipse-temurin:21-jdk-alpine
+
+WORKDIR /app
+
+# Install Maven and curl
+RUN apk add --no-cache maven curl
+
+# Copy POM file for dependency resolution
+COPY pom.xml .
+
+# Download dependencies
+RUN mvn dependency:resolve
+
+# Copy source code
+COPY src ./src
+
+# Expose port
+EXPOSE 8080
+
+# Development command with auto-reload
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.jvmArguments=-Dspring.profiles.active=dev"]
