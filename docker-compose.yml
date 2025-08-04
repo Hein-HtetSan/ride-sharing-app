@@ -77,6 +77,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    volumes:
+      - ./api/src:/app/src
+      - ./api/target:/app/target
+      - ./api/pom.xml:/app/pom.xml
+    command: ["./mvnw", "spring-boot:run"]
 
   # React Web Frontend
   web:

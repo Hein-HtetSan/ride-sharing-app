@@ -1,34 +1,52 @@
 package com.rsrmi.api.service;
 
-// TODO: Add RMI project as dependency or copy interfaces
-// import com.rsrmi.ride_sharing_api.rmi.interfaces.UserService;
+import com.rsrmi.api.model.User;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
-// TODO: Uncomment imports when RMI interfaces are available
-// import java.rmi.registry.LocateRegistry;
-// import java.rmi.registry.Registry;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.lang.reflect.Method;
 
 @Service
 public class UserServiceRmiClient {
-    // TODO: Uncomment when RMI interfaces are available
-    // private UserService userService;
+    private Object userService;
+
+    @Value("${rmi.host:rmi-server}")
+    private String rmiHost;
+
+    @Value("${rmi.port:1099}")
+    private int rmiPort;
 
     @PostConstruct
     public void init() {
         try {
-            // TODO: Uncomment when RMI interfaces are available
-            // Registry registry = LocateRegistry.getRegistry("localhost", 1099);
-            // userService = (UserService) registry.lookup("UserService");
+            Registry registry = LocateRegistry.getRegistry(rmiHost, rmiPort);
+            userService = registry.lookup("UserService");
         } catch (Exception e) {
             throw new RuntimeException("Failed to connect to RMI server", e);
         }
     }
 
-    // TODO: Uncomment when RMI interfaces are available
-    /*
-    public UserService getUserService() {
-        return userService;
+    public boolean registerUser(User user) throws Exception {
+        // Dynamically map API User to RMI User using reflection
+        Class<?> rmiUserClass = userService.getClass().getMethod("registerUser", Object.class).getParameterTypes()[0];
+        Object rmiUser = rmiUserClass.getDeclaredConstructor().newInstance();
+        // Set fields reflectively
+        rmiUserClass.getMethod("setId", int.class).invoke(rmiUser, user.getId());
+        rmiUserClass.getMethod("setUsername", String.class).invoke(rmiUser, user.getUsername());
+        rmiUserClass.getMethod("setPassword", String.class).invoke(rmiUser, user.getPassword());
+        rmiUserClass.getMethod("setName", String.class).invoke(rmiUser, user.getName());
+        rmiUserClass.getMethod("setEmail", String.class).invoke(rmiUser, user.getEmail());
+        rmiUserClass.getMethod("setPhone", String.class).invoke(rmiUser, user.getPhone());
+        if (user.getUserType() != null) {
+            Class<?> userTypeClass = rmiUserClass.getMethod("getUserType").getReturnType();
+            Object rmiUserType = Enum.valueOf((Class<Enum>)userTypeClass, user.getUserType().name());
+            rmiUserClass.getMethod("setUserType", userTypeClass).invoke(rmiUser, rmiUserType);
+        }
+        Method registerUserMethod = userService.getClass().getMethod("registerUser", rmiUserClass);
+        Object result = registerUserMethod.invoke(userService, rmiUser);
+        return (Boolean) result;
     }
-    */
 }
