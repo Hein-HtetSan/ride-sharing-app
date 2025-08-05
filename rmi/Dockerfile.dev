@@ -1,42 +1,56 @@
 
-# RMI Server Dockerfile using manual javac build
-FROM eclipse-temurin:21-jdk-alpine AS build
+# Development Dockerfile for RMI Server with Live Reload
+FROM eclipse-temurin:21-jdk-alpine
 
 WORKDIR /app
 
 # Install build tools
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-RUN apk update && apk add --no-cache bash findutils coreutils
+RUN apk update && apk add --no-cache bash findutils coreutils inotify-tools
 
-# Copy source, lib, and scripts
-COPY src ./src
+# Copy lib and scripts (these rarely change)
 COPY lib ./lib
 COPY scripts ./scripts
 
-# Build Java sources
-RUN find src -name "*.java" | sort > sources.txt \
-    && javac -d build -cp "./lib/postgresql-42.7.7.jar:./lib/HikariCP-6.3.1.jar:./lib/slf4j-api-2.0.15.jar:./lib/slf4j-simple-2.0.15.jar" @sources.txt
+# Make scripts executable
+RUN chmod +x ./scripts/*.sh
 
-# Runtime stage
-FROM eclipse-temurin:21-jre-alpine
+# Copy source code (this will be mounted as volume for live reload)
+COPY src ./src
 
-WORKDIR /app
-
-# Copy built classes and libs
-COPY --from=build /app/build ./build
-COPY --from=build /app/lib ./lib
-COPY --from=build /app/scripts ./scripts
+# Create a development script that recompiles on file changes
+RUN echo '#!/bin/bash' > /app/dev-start.sh && \
+    echo 'echo "Starting RMI Server in development mode with live reload..."' >> /app/dev-start.sh && \
+    echo 'RMI_HOST=${RMI_HOSTNAME:-localhost}' >> /app/dev-start.sh && \
+    echo 'echo "RMI Server will bind to: $RMI_HOST"' >> /app/dev-start.sh && \
+    echo 'compile_and_run() {' >> /app/dev-start.sh && \
+    echo '  echo "Compiling Java sources..."' >> /app/dev-start.sh && \
+    echo '  find src -name "*.java" | sort > sources.txt' >> /app/dev-start.sh && \
+    echo '  javac -d build -cp "./lib/postgresql-42.7.7.jar:./lib/HikariCP-6.3.1.jar:./lib/slf4j-api-2.0.15.jar:./lib/slf4j-simple-2.0.15.jar" @sources.txt' >> /app/dev-start.sh && \
+    echo '  if [ $? -eq 0 ]; then' >> /app/dev-start.sh && \
+    echo '    echo "Compilation successful. Starting RMI Server..."' >> /app/dev-start.sh && \
+    echo '    java -Djava.rmi.server.hostname=$RMI_HOST -Djava.net.preferIPv4Stack=true -cp "./build:./lib/*" com.rsrmi.ride_sharing_api.rmi.servers.RMIServer &' >> /app/dev-start.sh && \
+    echo '    SERVER_PID=$!' >> /app/dev-start.sh && \
+    echo '  else' >> /app/dev-start.sh && \
+    echo '    echo "Compilation failed!"' >> /app/dev-start.sh && \
+    echo '    return 1' >> /app/dev-start.sh && \
+    echo '  fi' >> /app/dev-start.sh && \
+    echo '}' >> /app/dev-start.sh && \
+    echo 'compile_and_run' >> /app/dev-start.sh && \
+    echo 'while true; do' >> /app/dev-start.sh && \
+    echo '  inotifywait -r -e modify,create,delete src/' >> /app/dev-start.sh && \
+    echo '  echo "Source code changed, recompiling..."' >> /app/dev-start.sh && \
+    echo '  kill $SERVER_PID 2>/dev/null' >> /app/dev-start.sh && \
+    echo '  sleep 2' >> /app/dev-start.sh && \
+    echo '  compile_and_run' >> /app/dev-start.sh && \
+    echo 'done' >> /app/dev-start.sh && \
+    chmod +x /app/dev-start.sh
 
 # Expose RMI port
 EXPOSE 1099
 
-# Set JVM options for RMI
-ENV JAVA_OPTS="-Djava.rmi.server.hostname=0.0.0.0 -Djava.net.preferIPv4Stack=true"
+# Set JVM options for RMI with dynamic hostname
+ENV JAVA_OPTS="-Djava.net.preferIPv4Stack=true"
 
-# Health check (optional, adjust class if needed)
-# HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-#   CMD java -cp "./build:./lib/*" com.rsrmi.ride_sharing_api.rmi.health.HealthCheck || exit 1
-
-# Make sure the script is executable and use it as the entrypoint
-RUN chmod +x ./scripts/start-server.sh
-CMD ["sh", "./scripts/start-server.sh"]
+# Use the development script for live reload
+CMD ["./dev-start.sh"]

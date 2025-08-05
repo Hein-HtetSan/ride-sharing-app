@@ -99,7 +99,7 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
     public List<DriverLocationInfo> findNearbyDrivers(Location riderLocation, double radiusKm) throws RemoteException {
         List<DriverLocationInfo> result = new ArrayList<>();
         if (riderLocation == null) return result;
-        String sql = "SELECT ul.user_id, ul.latitude, ul.longitude, ul.address, ul.last_updated, u.name, u.email, u.phone, u.user_type " +
+        String sql = "SELECT ul.user_id, ul.latitude, ul.longitude, ul.address, ul.last_updated, u.phone, u.user_type " +
                 "FROM user_locations ul " +
                 "JOIN users u ON ul.user_id = u.id " +
                 "WHERE u.user_type = 'DRIVER' AND ul.is_available = TRUE";
@@ -116,8 +116,6 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
                     DriverLocationInfo info = new DriverLocationInfo();
                     User driver = new User();
                     driver.setId(rs.getInt("user_id"));
-                    driver.setName(rs.getString("name"));
-                    driver.setEmail(rs.getString("email"));
                     driver.setPhone(rs.getString("phone"));
                     driver.setUserType(User.UserType.valueOf(rs.getString("user_type")));
                     info.setDriver(driver);

@@ -23,7 +23,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRiderSignup, onDriverSignup
               Your Ride,
               <span className="text-blue-200"> Your Way</span>
             </h1>
-            
+
             <p className="text-xl md:text-2xl text-blue-100 mb-12 max-w-3xl mx-auto">
               Connect with nearby drivers for safe, reliable, and affordable rides. 
               Join thousands of riders and drivers in your city.

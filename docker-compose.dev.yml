@@ -35,6 +35,7 @@ services:
       DB_NAME: ride_sharing
       DB_USER: postgres
       DB_PASSWORD: postgres
+      RMI_HOSTNAME: rmi-server
     ports:
       - "1099:1099"
     depends_on:
@@ -43,9 +44,13 @@ services:
     networks:
       - ride-sharing-network
     volumes:
-      - ./rmi:/app
-    command: ./scripts/start-server.sh
+      - ./rmi/src:/app/src
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "echo > /dev/tcp/localhost/1099"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   # Spring Boot API
   api:

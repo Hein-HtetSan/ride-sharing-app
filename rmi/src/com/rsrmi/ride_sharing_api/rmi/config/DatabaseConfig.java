@@ -70,7 +70,7 @@ public class DatabaseConfig {
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
                     username VARCHAR(50) UNIQUE NOT NULL,
-                    email VARCHAR(100) UNIQUE NOT NULL,
+                    phone VARCHAR(100) UNIQUE NOT NULL,
                     password VARCHAR(255) NOT NULL,
                     user_type VARCHAR(20) NOT NULL CHECK (user_type IN ('RIDER', 'DRIVER')),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -107,7 +107,7 @@ public class DatabaseConfig {
             """);
             
             // Create indexes for better performance
-            stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+            stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)");
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)");
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_user_locations_user_id ON user_locations(user_id)");
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_rides_rider_id ON rides(rider_id)");

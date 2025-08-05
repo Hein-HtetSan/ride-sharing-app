@@ -10,5 +10,5 @@ public interface UserService extends Remote {
     User getUserById(int id) throws RemoteException;
     boolean updateUser(User user) throws RemoteException;
     boolean isUsernameExists(String username) throws RemoteException;
-    boolean isEmailExists(String email) throws RemoteException;
+    boolean isPhoneExists(String phone) throws RemoteException;
 }

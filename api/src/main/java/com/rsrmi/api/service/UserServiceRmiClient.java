@@ -17,8 +17,6 @@ public class UserServiceRmiClient {
         rmiUser.setId(user.getId());
         rmiUser.setUsername(user.getUsername());
         rmiUser.setPassword(user.getPassword());
-        rmiUser.setName(user.getName());
-        rmiUser.setEmail(user.getEmail());
         rmiUser.setPhone(user.getPhone());
         if (user.getUserType() != null) {
             rmiUser.setUserType(com.rsrmi.ride_sharing_api.rmi.models.User.UserType.valueOf(user.getUserType().name()));

@@ -53,5 +53,5 @@ public interface UserService extends Remote {
      * @return true if email exists, false otherwise
      * @throws RemoteException Required for RMI
      */
-    public boolean isEmailExists(String email) throws RemoteException;
+    public boolean isPhoneExists(String email) throws RemoteException;
 }

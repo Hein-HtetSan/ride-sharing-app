@@ -28,11 +28,11 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public boolean registerUser(User user) throws RemoteException {
-        String sql = "INSERT INTO users (username, email, password, user_type) VALUES (?, ?, ?, 'RIDER')";
+        String sql = "INSERT INTO users (username, phone, password, user_type) VALUES (?, ?, ?, 'RIDER')";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, user.getUsername());
-            stmt.setString(2, user.getEmail());
+            stmt.setString(2, user.getPhone());
             stmt.setString(3, user.getPassword());
             stmt.executeUpdate();
             System.out.println("✅ User registered successfully: " + user.getUsername());
@@ -44,24 +44,24 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
     }
 
     @Override
-    public User loginUser(String email, String password) throws RemoteException {
-        String sql = "SELECT id, username, email, password, user_type FROM users WHERE email = ? AND password = ?";
+    public User loginUser(String phone, String password) throws RemoteException {
+        String sql = "SELECT id, username, phone, password, user_type FROM users WHERE phone = ? AND password = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, email);
+            stmt.setString(1, phone);
             stmt.setString(2, password);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 User user = new User();
                 user.setId(rs.getInt("id"));
                 user.setUsername(rs.getString("username"));
-                user.setEmail(rs.getString("email"));
+                user.setPhone(rs.getString("phone"));
                 user.setPassword(rs.getString("password"));
                 user.setUserType(User.UserType.valueOf(rs.getString("user_type")));
-                System.out.println("✅ Login successful: " + email);
+                System.out.println("✅ Login successful: " + phone);
                 return user;
             }
-            System.out.println("Login failed: Invalid email or password");
+            System.out.println("Login failed: Invalid phone or password");
             return null;
         } catch (SQLException e) {
             System.err.println("Login failed: " + e.getMessage());
@@ -75,7 +75,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, user.getUsername());
-            stmt.setString(2, user.getEmail());
+            stmt.setString(2, user.getPhone());
             stmt.setString(3, user.getPassword());
             stmt.setString(4, user.getUserType().toString());
             stmt.setInt(5, user.getId());
@@ -88,15 +88,15 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
     }
 
     @Override
-    public boolean isEmailExists(String email) throws RemoteException {
-        String sql = "SELECT 1 FROM users WHERE email = ?";
+    public boolean isPhoneExists(String phone) throws RemoteException {
+        String sql = "SELECT 1 FROM users WHERE phone = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, email);
+            stmt.setString(1, phone);
             ResultSet rs = stmt.executeQuery();
             return rs.next();
         } catch (SQLException e) {
-            System.err.println("Email existence check failed: " + e.getMessage());
+            System.err.println("Phone existence check failed: " + e.getMessage());
             return false;
         }
     }
@@ -117,7 +117,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public User getUserById(int id) throws RemoteException {
-        String sql = "SELECT id, username, email, password, user_type FROM users WHERE id = ?";
+        String sql = "SELECT id, username, phone, password, user_type FROM users WHERE id = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, id);
@@ -126,7 +126,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
                 User user = new User();
                 user.setId(rs.getInt("id"));
                 user.setUsername(rs.getString("username"));
-                user.setEmail(rs.getString("email"));
+                user.setPhone(rs.getString("phone"));
                 user.setPassword(rs.getString("password"));
                 user.setUserType(User.UserType.valueOf(rs.getString("user_type")));
                 return user;

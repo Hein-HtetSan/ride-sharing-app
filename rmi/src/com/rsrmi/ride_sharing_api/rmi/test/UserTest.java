@@ -14,14 +14,12 @@ public class UserTest {
         user1.setId(1);
         user1.setUsername("john_doe");
         user1.setPassword("password123");
-        user1.setName("John Doe");
-        user1.setEmail("john@example.com");
         user1.setPhone("555-1234");
         user1.setUserType(User.UserType.RIDER);
         System.out.println("User 1: " + user1);
         
         // Test 2: Constructor with parameters
-        User user2 = new User(2, "jane_doe", "pass456", "Jane Doe", "jane@example.com", "555-5678", User.UserType.DRIVER);
+        User user2 = new User(2, "jane_doe", "pass456", "555-5678", User.UserType.DRIVER);
         System.out.println("User 2: " + user2);
     }
 }

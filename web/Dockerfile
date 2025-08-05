@@ -13,11 +13,10 @@ COPY . .
 # Build the app
 RUN npm run build
 
-# Production Nginx image
+# Production Nginx image (npm is NOT needed in this stage)
 FROM nginx:alpine
 
-
-# Copy built files to Nginx (for Create React App default build output)
+# Only static files are copied from the build stage; npm is not required here.
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Expose port 80 for Nginx
