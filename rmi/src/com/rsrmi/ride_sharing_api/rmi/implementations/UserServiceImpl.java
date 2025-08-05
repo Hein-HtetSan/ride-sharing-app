@@ -138,5 +138,10 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
         }
     }
 
+    @Override
+    public boolean ping() throws RemoteException {
+        return true;
+    }
+
     // Implement other methods as needed, or throw UnsupportedOperationException
 }

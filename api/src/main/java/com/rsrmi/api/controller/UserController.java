@@ -10,9 +10,11 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 
+import com.rsrmi.api.dto.ApiResponse;
+
 @RestController
 @RequestMapping("/api/v1/users")
-@Tag(name = "User", description = "User management endpoints")
+@Tag(name = "User", description = "User endpoints")
 public class UserController {
     @Autowired
     private UserServiceRmiClient userServiceRmiClient;
@@ -20,16 +22,18 @@ public class UserController {
     // Register a user via RMI
     @PostMapping("/register")
     @Operation(summary = "Register a new user via RMI", description = "Registers a user using the RMI microservice.")
-    public ResponseEntity<String> registerUser(@org.springframework.web.bind.annotation.RequestBody User user) {
+    public ResponseEntity<ApiResponse> registerUser(@org.springframework.web.bind.annotation.RequestBody User user) {
         try {
             boolean success = userServiceRmiClient.registerUser(user);
             if (success) {
-                return ResponseEntity.ok("User registered successfully via RMI");
+                return ResponseEntity.ok(new ApiResponse(true, "User registered successfully via RMI"));
             } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Registration failed");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse(false, "Registration failed"));
             }
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
         }
     }
 }

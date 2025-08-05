@@ -5,6 +5,8 @@ import java.rmi.RemoteException;
 import com.rsrmi.ride_sharing_api.rmi.models.User;
 
 public interface UserService extends Remote {
+
+    public boolean ping() throws RemoteException;
     
     /**
      * Register a new user

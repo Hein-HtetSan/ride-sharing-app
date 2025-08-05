@@ -41,7 +41,7 @@ check_api() {
     local attempt=0
     local max_attempts=60  # 5 minutes timeout (60 * 5 seconds)
     
-    while ! curl -s -f http://localhost:8080/health >/dev/null 2>&1; do
+    while ! curl -s -f http://localhost:8080/api/v1/health >/dev/null 2>&1; do
         attempt=$((attempt + 1))
         if [ $attempt -le $max_attempts ]; then
             if [ $((attempt % 6)) -eq 0 ]; then  # Show message every 30 seconds

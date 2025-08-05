@@ -153,6 +153,9 @@ docker-compose -f docker-compose.dev.yml logs -f
 
 # View logs (specific service)
 docker-compose -f docker-compose.dev.yml logs -f [service-name]
+
+# Restart the specific service
+docker-compose -f docker-compose.dev.yml restart [service-name]
 ```
 
 ### Production
