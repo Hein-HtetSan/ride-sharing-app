@@ -31,7 +31,8 @@ COPY --from=build /app/scripts ./scripts
 EXPOSE 1099
 
 # Set JVM options for RMI
-ENV JAVA_OPTS="-Djava.rmi.server.hostname=0.0.0.0 -Djava.net.preferIPv4Stack=true"
+ENV RMI_HOSTNAME=rmi-server
+ENV JAVA_OPTS="-Djava.rmi.server.hostname=${RMI_HOSTNAME} -Djava.net.preferIPv4Stack=true"
 
 # Health check (optional, adjust class if needed)
 # HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

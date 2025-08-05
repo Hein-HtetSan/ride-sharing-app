@@ -163,6 +163,9 @@ docker-compose -f docker-compose.dev.yml restart [service-name]
 # Stop production services
 docker-compose down
 
+# Run production services
+docker-compose up -d
+
 # Rebuild everything
 docker-compose up --build
 
