@@ -3,14 +3,18 @@ FROM eclipse-temurin:21-jdk-alpine
 
 WORKDIR /app
 
-# Install Maven and curl
-RUN apk add --no-cache maven curl
+# Install curl for health checks only
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk update && apk add --no-cache curl
 
-# Copy POM file for dependency resolution
+# Copy Maven wrapper and POM file
+COPY mvnw .
+COPY .mvn ./.mvn
 COPY pom.xml .
 
-# Download dependencies
-RUN mvn dependency:resolve
+# Make Maven wrapper executable and download dependencies
+RUN chmod +x ./mvnw
+RUN ./mvnw dependency:resolve
 
 # Copy source code
 COPY src ./src
@@ -19,4 +23,4 @@ COPY src ./src
 EXPOSE 8080
 
 # Development command with auto-reload
-CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.jvmArguments=-Dspring.profiles.active=dev"]
+CMD ["./mvnw", "spring-boot:run", "-Dspring-boot.run.jvmArguments=-Dspring.profiles.active=dev"]
