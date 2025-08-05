@@ -3,8 +3,12 @@
 echo "Starting Ride Sharing App Development Environment..."
 echo "=================================================="
 
+echo "Down all Docker services..."
+docker-compose down
+
 echo "Starting Docker Compose services..."
-docker-compose -f docker-compose.dev.yml up -d
+echo "Building and starting all Docker Compose services..."
+docker-compose -f docker-compose.dev.yml up --build -d
 
 echo ""
 echo "Waiting for services to start..."

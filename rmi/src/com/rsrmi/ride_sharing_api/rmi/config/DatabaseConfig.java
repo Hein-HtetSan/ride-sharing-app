@@ -24,7 +24,7 @@ public class DatabaseConfig {
         String dbPort = System.getenv("DB_PORT") != null ? System.getenv("DB_PORT") : "5432";
         String dbName = System.getenv("DB_NAME") != null ? System.getenv("DB_NAME") : "ride_sharing";
         String dbUser = System.getenv("DB_USER") != null ? System.getenv("DB_USER") : "postgres";
-        String dbPassword = System.getenv("DB_PASSWORD") != null ? System.getenv("DB_PASSWORD") : "postgres";
+        String dbPassword = System.getenv("DB_PASSWORD") != null ? System.getenv("DB_PASSWORD") : "ykpt22270";
         
         config.setJdbcUrl("jdbc:postgresql://" + dbHost + ":" + dbPort + "/" + dbName);
         config.setUsername(dbUser);

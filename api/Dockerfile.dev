@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install curl for health checks only
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-RUN apk update && apk add --no-cache curl
+RUN apk update && apk add --no-cache curl bzip2
 
 # Copy Maven wrapper and POM file
 COPY mvnw .

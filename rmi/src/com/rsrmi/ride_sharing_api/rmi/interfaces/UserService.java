@@ -39,7 +39,7 @@ public interface UserService extends Remote {
      * @return true if update successful, false otherwise
      * @throws RemoteException Required for RMI
      */
-    public boolean updateUser(User user) throws RemoteException;
+    public User updateUser(int id, User user) throws RemoteException;
     
     /**
      * Check if username already exists

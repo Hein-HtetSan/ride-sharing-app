@@ -19,7 +19,7 @@ WORKDIR /app
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # Install curl for health checks
-RUN apk update && apk add --no-cache curl
+RUN apk update && apk add --no-cache curl bzip2
 
 # Copy the built JAR
 COPY --from=build /app/target/api-0.0.1-SNAPSHOT.jar app.jar

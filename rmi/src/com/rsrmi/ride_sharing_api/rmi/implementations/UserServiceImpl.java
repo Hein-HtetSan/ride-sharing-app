@@ -45,18 +45,18 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public User loginUser(String phone, String password) throws RemoteException {
-        String sql = "SELECT id, username, phone, password, user_type FROM users WHERE phone = ? AND password = ?";
+        String sql = "SELECT id, username, phone, user_type FROM users WHERE phone = ? AND password = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, phone);
             stmt.setString(2, password);
             ResultSet rs = stmt.executeQuery();
+            System.out.println("phone is " + phone + " password is " + password);
             if (rs.next()) {
                 User user = new User();
                 user.setId(rs.getInt("id"));
                 user.setUsername(rs.getString("username"));
                 user.setPhone(rs.getString("phone"));
-                user.setPassword(rs.getString("password"));
                 user.setUserType(User.UserType.valueOf(rs.getString("user_type")));
                 System.out.println("✅ Login successful: " + phone);
                 return user;
@@ -70,20 +70,22 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
     }
 
     @Override
-    public boolean updateUser(User user) throws RemoteException {
-        String sql = "UPDATE users SET username = ?, email = ?, password = ?, user_type = ? WHERE id = ?";
+    public User updateUser(int id, User user) throws RemoteException {
+        String sql = "UPDATE users SET username = ?, phone = ? WHERE id = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
-            PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, user.getUsername());
             stmt.setString(2, user.getPhone());
-            stmt.setString(3, user.getPassword());
-            stmt.setString(4, user.getUserType().toString());
-            stmt.setInt(5, user.getId());
+            stmt.setInt(3, id);
             int rows = stmt.executeUpdate();
-            return rows > 0;
+            if (rows > 0) {
+                return getUserById(user.getId());
+            } else {
+                return null;
+            }
         } catch (SQLException e) {
             System.err.println("Update failed: " + e.getMessage());
-            return false;
+            return null;
         }
     }
 
