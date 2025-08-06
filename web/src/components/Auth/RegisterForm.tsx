@@ -21,6 +21,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const { login } = useAuth();
 
@@ -42,14 +43,19 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType }) => {
         password: formData.password,
         userType,
         ...(userType === 'DRIVER' && {
-          vehicleType: formData.vehicleType,
-          vehicleNumber: formData.vehicleNumber,
+          carType: formData.vehicleType,
+          licenseNumber: formData.vehicleNumber,
         }),
       };
 
-      const response = await authAPI.register(registrationData);
-      login(response.data.user, response.data.token);
-      navigate(userType === 'DRIVER' ? '/driver' : '/rider');
+      const success = await authAPI.register(registrationData);
+      if (success) {
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          navigate(`/login/${userType.toLowerCase()}`);
+        }, 1800);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
@@ -67,6 +73,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+        {showSuccess && (
+          <div className="bg-green-50 border border-green-300 text-green-800 px-4 py-3 rounded-lg text-center font-medium">
+            Registration successful! Redirecting to login...
+          </div>
+        )}
         <button
           type="button"
           className="mb-4 flex items-center text-blue-600 hover:text-blue-800 font-medium"

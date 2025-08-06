@@ -2,20 +2,34 @@ package com.rsrmi.ride_sharing_api.rmi.models;
 
 import java.io.Serializable;
 
-public class Location implements Serializable {
+public class UserLocation implements Serializable {
     private static final long serialVersionUID = 1L;
+    private int user_id;
     private double latitude;
     private double longitude;
     private String address;
+    private boolean is_online;
+    private String last_updated;
 
-    public Location() {
+    public UserLocation() {
         // Default constructor
     }
 
-    public Location(double latitude, double longitude, String address) {
+    public UserLocation(int user_id, double latitude, double longitude, String address, boolean is_online, String last_updated) {
+        this.user_id = user_id;
         this.latitude = latitude;
         this.longitude = longitude;
         this.address = address;
+        this.is_online = is_online;
+        this.last_updated = last_updated;
+    }
+
+    public int getUserId() {
+        return this.user_id;
+    }
+
+    public void setUserId(int user_id) {
+        this.user_id = user_id;
     }
 
     public double getLatitude() {
@@ -39,15 +53,34 @@ public class Location implements Serializable {
     }
 
     public void setAddress(String address) {
-        this.address = address;  // ✅ Fixed: now assigns value instead of return
+        this.address = address; 
+    }
+
+    public boolean getIsOnline() {
+        return this.is_online;
+    }
+
+    public void setIsOnline(boolean is_online) {
+        this.is_online = is_online;
+    }
+
+    public String getLastUpdated() {
+        return this.last_updated;
+    }
+
+    public void setLastUpdated(String last_updated) {
+        this.last_updated = last_updated;
     }
 
     @Override
     public String toString() {
         return "Location{" +
-                "latitude=" + latitude +
+                "user_id=" + user_id +
+                ", latitude=" + latitude +
                 ", longitude=" + longitude +
-                ", address='" + address + '\'' +
+                ", address=" + address +
+                ", is_online=" + is_online +
+                ", last_updated='" + last_updated + '\'' +
                 '}';
     }
 
@@ -55,7 +88,7 @@ public class Location implements Serializable {
      * Calculate distance between this location and another location
      * Using Haversine formula to calculate distance in kilometers
      */
-    public double calculateDistance(Location other) {
+    public double calculateDistance(UserLocation other) {
         if (other == null) {
             return Double.MAX_VALUE;
         }

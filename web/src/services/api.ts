@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { User, Driver, Rider, Ride, RideRequest, Location } from '../types';
+import { RideRequest, Location } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:8080/api/v1';
 
@@ -30,9 +30,17 @@ export const authAPI = {
     phone: string;
     password: string;
     userType: 'RIDER' | 'DRIVER';
+    carType?: string | null;
+    licenseNumber?: string | null;
   }) => {
-    const response = await api.post('/users/register', userData);
-    return response.data;
+    // If not a driver, ensure carType and licenseNumber are null
+    const payload = { ...userData };
+    if (userData.userType !== 'DRIVER') {
+      payload.carType = null;
+      payload.licenseNumber = null;
+    }
+    const response = await api.post('/users/register', payload);
+    return response.data.success;
   },
 
   logout: async () => {

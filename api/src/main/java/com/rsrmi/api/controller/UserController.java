@@ -33,6 +33,10 @@ public class UserController {
     @Operation(summary = "Register a new user via RMI", description = "Registers a user using the RMI microservice.")
     public ResponseEntity<ApiResponse> registerUser(@org.springframework.web.bind.annotation.RequestBody User user) {
         try {
+            if (user.getUserType() != null && user.getUserType() != User.UserType.DRIVER) {
+                user.setCarType(null);
+                user.setLicenseNumber(null);
+            }
             boolean success = userServiceRmiClient.registerUser(user);
             if (success) {
                 return ResponseEntity.ok(new ApiResponse(true, "User registered successfully via RMI"));
@@ -94,7 +98,7 @@ public class UserController {
         }
     }
 
-    @PostMapping("/update")
+    @PutMapping("/update")
     @Operation(
         summary = "Update user by id",
         description = "Update user object by user id via RMI (JWT protected)",

@@ -1,8 +1,7 @@
 package com.rsrmi.ride_sharing_api.rmi.implementations;
 
 import com.rsrmi.ride_sharing_api.rmi.interfaces.LocationService;
-import com.rsrmi.ride_sharing_api.rmi.models.Location;
-import com.rsrmi.ride_sharing_api.rmi.models.DriverLocationInfo;
+import com.rsrmi.ride_sharing_api.rmi.models.UserLocation;
 import com.rsrmi.ride_sharing_api.rmi.models.User;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
@@ -24,8 +23,8 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
 
     // Update a user's location, timestamp, and availability
     @Override
-    public boolean updateUserLocation(int userId, Location location, long timestamp, boolean isAvailable) throws RemoteException {
-        String sql = "INSERT INTO user_locations (user_id, latitude, longitude, address, last_updated, is_available) " +
+    public boolean updateUserLocation(int userId, UserLocation location, long timestamp, boolean isAvailable) throws RemoteException {
+        String sql = "INSERT INTO user_locations (user_id, latitude, longitude, address, last_updated, is_online) " +
                 "VALUES (?, ?, ?, ?, ?, ?) " +
                 "ON CONFLICT (user_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, address = EXCLUDED.address, last_updated = EXCLUDED.last_updated, is_available = EXCLUDED.is_available";
         try (Connection conn = dbConfig.getConnection();
@@ -46,8 +45,8 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
 
     // Get the current location for a user
     @Override
-    public Location getUserLocation(int userId) throws RemoteException {
-        String sql = "SELECT latitude, longitude, address FROM user_locations WHERE user_id = ?";
+    public UserLocation getUserLocation(int userId) throws RemoteException {
+        String sql = "SELECT latitude, longitude, address, is_online, last_updated FROM user_locations WHERE user_id = ?";
         try (Connection conn = dbConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, userId);
@@ -56,7 +55,9 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
                     double lat = rs.getDouble("latitude");
                     double lon = rs.getDouble("longitude");
                     String address = rs.getString("address");
-                    return new Location(lat, lon, address);
+                    boolean is_online = rs.getBoolean("is_online");
+                    String last_updated = rs.getString("last_updated");
+                    return new UserLocation(userId, lat, lon, address, is_online, last_updated);
                 }
             }
         } catch (SQLException e) {
@@ -65,44 +66,15 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
         return null;
     }
 
-    // Remove a user location when they go offline or log out.
-    @Override
-    public boolean removeUserLocation(int userId) throws RemoteException {
-        String sql = "DELETE FROM user_locations WHERE user_id = ?";
-        try (Connection conn = dbConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, userId);
-            int affected = stmt.executeUpdate();
-            return affected > 0;
-        } catch (SQLException e) {
-            System.err.println("removeUserLocation: SQL error: " + e.getMessage());
-            return false;
-        }
-    }
-
-    // Get the driver location for real-time tracking
-    @Override
-    public Location getDriverLocation(int driverId) throws RemoteException {
-        // Optionally, check user type in user table if needed
-        return getUserLocation(driverId);
-    }
-
-    // Get the rider location for real-time tracking
-    @Override
-    public Location getRiderLocation(int riderId) throws RemoteException {
-        // Optionally, check user type in user table if needed
-        return getUserLocation(riderId);
-    }
-
     // Find nearby drivers within a radius
     @Override
-    public List<DriverLocationInfo> findNearbyDrivers(Location riderLocation, double radiusKm) throws RemoteException {
-        List<DriverLocationInfo> result = new ArrayList<>();
+    public List<UserLocation> findNearbyDrivers(UserLocation riderLocation, double radiusKm) throws RemoteException {
+        List<UserLocation> result = new ArrayList<>();
         if (riderLocation == null) return result;
-        String sql = "SELECT ul.user_id, ul.latitude, ul.longitude, ul.address, ul.last_updated, u.phone, u.user_type " +
+        String sql = "SELECT ul.user_id, ul.latitude, ul.longitude, ul.address, ul.is_online, ul.last_updated " +
                 "FROM user_locations ul " +
                 "JOIN users u ON ul.user_id = u.id " +
-                "WHERE u.user_type = 'DRIVER' AND ul.is_available = TRUE";
+                "WHERE u.user_type = 'DRIVER' AND ul.is_online = TRUE";
         try (Connection conn = dbConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -113,16 +85,12 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
                         riderLocation.getLatitude(), riderLocation.getLongitude(),
                         lat, lon);
                 if (distance <= radiusKm) {
-                    DriverLocationInfo info = new DriverLocationInfo();
-                    User driver = new User();
-                    driver.setId(rs.getInt("user_id"));
-                    driver.setPhone(rs.getString("phone"));
-                    driver.setUserType(User.UserType.valueOf(rs.getString("user_type")));
-                    info.setDriver(driver);
-                    info.setLocation(new Location(lat, lon, rs.getString("address")));
-                    info.setDistance(distance);
-                    info.setLastUpdated(rs.getLong("last_updated"));
-                    result.add(info);
+                    int userId = rs.getInt("user_id");
+                    String address = rs.getString("address");
+                    boolean isOnline = rs.getBoolean("is_online");
+                    String lastUpdated = rs.getString("last_updated");
+                    UserLocation driverLoc = new UserLocation(userId, lat, lon, address, isOnline, lastUpdated);
+                    result.add(driverLoc);
                 }
             }
         } catch (SQLException e) {

@@ -1,48 +1,133 @@
 package com.rsrmi.api.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
 
-import java.util.*;
+import com.rsrmi.api.dto.ApiResponse;
+import com.rsrmi.api.model.User;
+import com.rsrmi.api.service.UserServiceRmiClient;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@SecurityScheme(
+    name = "bearerAuth",
+    type = io.swagger.v3.oas.annotations.enums.SecuritySchemeType.HTTP,
+    scheme = "bearer",
+    bearerFormat = "JWT"
+)
 @RestController
 @RequestMapping("/api/v1/drivers")
+@Tag(name = "Driver", description = "Driver endpoints")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173"})
 public class DriverController {
 
-    @GetMapping("/nearby")
-    public Mono<ResponseEntity<?>> getNearbyDrivers(
-            @RequestParam double lat,
-            @RequestParam double lng,
-            @RequestParam(defaultValue = "5") int radius) {
-        
-        // Mock nearby drivers data
-        List<Map<String, Object>> drivers = Arrays.asList(
-            createMockDriver("1", "John Doe", "Toyota Camry", 4.8, 2),
-            createMockDriver("2", "Jane Smith", "Honda Civic", 4.9, 3),
-            createMockDriver("3", "Mike Johnson", "Nissan Altima", 4.7, 5)
-        );
-        
-        return Mono.just(ResponseEntity.ok(drivers));
+    @Autowired
+    private UserServiceRmiClient userServiceRmiClient;
+
+    // Register a user via RMI
+    @PostMapping("/register")
+    @Operation(summary = "Register a new driver via RMI", description = "Registers a driver using the RMI microservice.")
+    public ResponseEntity<ApiResponse> registerUser(@org.springframework.web.bind.annotation.RequestBody User user) {
+        try {
+            user.setUserType(User.UserType.DRIVER);
+            boolean success = userServiceRmiClient.registerUser(user);
+            if (success) {
+                return ResponseEntity.ok(new ApiResponse(true, "Driver registered successfully via RMI"));
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse(false, "Registration failed"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
+        }
     }
 
-    private Map<String, Object> createMockDriver(String id, String username, String vehicleType, double rating, int minutesAway) {
-        Map<String, Object> driver = new HashMap<>();
-        driver.put("id", id);
-        driver.put("username", username);
-        driver.put("vehicleType", vehicleType);
-        driver.put("rating", rating);
-        driver.put("minutesAway", minutesAway);
-        driver.put("isAvailable", true);
-        
-        // Mock location near the requested location
-        Map<String, Object> location = new HashMap<>();
-        location.put("lat", 16.8661 + (Math.random() - 0.5) * 0.01); // Slightly randomize around Yangon
-        location.put("lng", 96.1951 + (Math.random() - 0.5) * 0.01);
-        location.put("address", "Near your location");
-        driver.put("currentLocation", location);
-        
-        return driver;
+    // Login driver
+    @PostMapping("/login")
+    @Operation(summary = "Login driver via RMI", description = "Login a driver using the RMI microservice and receive a JWT token.")
+    public ResponseEntity<ApiResponse> loginUser(
+        @RequestParam String phone,
+        @RequestParam String password
+    ) {
+        try {
+            User user = userServiceRmiClient.loginUser(phone, password);
+            if (user != null) {
+                // Generate JWT
+                String token = com.rsrmi.api.util.JwtUtil.generateToken(user.getId(), user.getPhone(), user.getUserType() != null ? user.getUserType().name() : "");
+                // Return token and user info
+                java.util.Map<String, Object> data = new java.util.HashMap<>();
+                data.put("user", user);
+                data.put("token", token);
+                return ResponseEntity.ok(new ApiResponse(true, "Login successful", data));
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ApiResponse(false, "Invalid phone or password"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
+        }
     }
+
+    @GetMapping("/get")
+    @Operation(
+        summary = "Get driver by id", 
+        description = "Get driver object by driver id via RMI (JWT protected)",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse> getById(@RequestParam int id) {
+        try {
+            User user = userServiceRmiClient.getById(id);
+            if (user != null) {
+                return ResponseEntity.ok(new ApiResponse(true, "User is existed", user));
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse(false, "User doesn't exist"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/update")
+    @Operation(
+        summary = "Update driver by id",
+        description = "Update driver object by driver id via RMI (JWT protected)",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse> updateUser(
+        @RequestParam int id,
+        @RequestParam String username,
+        @RequestParam String phone
+    ) {
+        try {
+            // Check if driver exists
+            User existing = userServiceRmiClient.getById(id);
+            if (existing == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse(false, "User doesn't exist"));
+            }
+            // Only update allowed fields
+            existing.setUsername(username);
+            existing.setPhone(phone);
+            User updated = userServiceRmiClient.updateUser(id, existing);
+            if (updated != null) {
+                return ResponseEntity.ok(new ApiResponse(true, "User updated successfully", updated));
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(new ApiResponse(false, "Failed to update user"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
+        }
+    }
+
+    
 }

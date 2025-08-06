@@ -28,12 +28,26 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public boolean registerUser(User user) throws RemoteException {
-        String sql = "INSERT INTO users (username, phone, password, user_type) VALUES (?, ?, ?, 'RIDER')";
+        String sql;
+        if (user.getUserType() == User.UserType.DRIVER) {
+            System.out.println("car " + user.getCarType() + " lic " + user.getLicenseNumber());
+            sql = "INSERT INTO users (username, phone, password, user_type, car_type, license_number) VALUES (?, ?, ?, ?, ?, ?)";
+        } else {
+            sql = "INSERT INTO users (username, phone, password, user_type) VALUES (?, ?, ?, ?)";
+        }
+        
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, user.getUsername());
             stmt.setString(2, user.getPhone());
             stmt.setString(3, user.getPassword());
+            stmt.setString(4, user.getUserType().toString());
+            
+            if (user.getUserType() == User.UserType.DRIVER) {
+                stmt.setString(5, user.getCarType());
+                stmt.setString(6, user.getLicenseNumber());
+            }
+            
             stmt.executeUpdate();
             System.out.println("✅ User registered successfully: " + user.getUsername());
             return true;
@@ -45,7 +59,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public User loginUser(String phone, String password) throws RemoteException {
-        String sql = "SELECT id, username, phone, user_type FROM users WHERE phone = ? AND password = ?";
+        String sql = "SELECT id, username, phone, user_type, car_type, license_number FROM users WHERE phone = ? AND password = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, phone);
@@ -58,6 +72,13 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
                 user.setUsername(rs.getString("username"));
                 user.setPhone(rs.getString("phone"));
                 user.setUserType(User.UserType.valueOf(rs.getString("user_type")));
+                
+                // Set driver-specific fields if user is a driver
+                if (user.getUserType() == User.UserType.DRIVER) {
+                    user.setCarType(rs.getString("car_type"));
+                    user.setLicenseNumber(rs.getString("license_number"));
+                }
+                
                 System.out.println("✅ Login successful: " + phone);
                 return user;
             }
@@ -71,21 +92,49 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public User updateUser(int id, User user) throws RemoteException {
-        String sql = "UPDATE users SET username = ?, phone = ? WHERE id = ?";
+        String sql;
+        if (user.getUserType() == User.UserType.DRIVER) {
+            sql = "UPDATE users SET username = ?, phone = ?, car_type = ?, license_number = ? WHERE id = ?";
+        } else {
+            sql = "UPDATE users SET username = ?, phone = ? WHERE id = ?";
+        }
+        
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, user.getUsername());
             stmt.setString(2, user.getPhone());
-            stmt.setInt(3, id);
+            
+            if (user.getUserType() == User.UserType.DRIVER) {
+                stmt.setString(3, user.getCarType());
+                stmt.setString(4, user.getLicenseNumber());
+                stmt.setInt(5, id);
+            } else {
+                stmt.setInt(3, id);
+            }
+            
             int rows = stmt.executeUpdate();
             if (rows > 0) {
-                return getUserById(user.getId());
+                return getUserById(id);
             } else {
                 return null;
             }
         } catch (SQLException e) {
             System.err.println("Update failed: " + e.getMessage());
             return null;
+        }
+    }
+
+    @Override
+    public boolean deleteUser(int id) throws RemoteException {
+        String sql = "DELETE FROM users WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getInstance().getConnection();
+            PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, id);
+                int rows = stmt.executeUpdate();
+                return rows > 0;
+        } catch (SQLException e) {
+            System.err.println("Delete failed: " + e.getMessage());
+            return false;
         }
     }
 
@@ -119,7 +168,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
 
     @Override
     public User getUserById(int id) throws RemoteException {
-        String sql = "SELECT id, username, phone, password, user_type FROM users WHERE id = ?";
+        String sql = "SELECT id, username, phone, password, user_type, car_type, license_number FROM users WHERE id = ?";
         try (Connection conn = DatabaseConfig.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, id);
@@ -131,6 +180,13 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
                 user.setPhone(rs.getString("phone"));
                 user.setPassword(rs.getString("password"));
                 user.setUserType(User.UserType.valueOf(rs.getString("user_type")));
+                
+                // Set driver-specific fields if user is a driver
+                if (user.getUserType() == User.UserType.DRIVER) {
+                    user.setCarType(rs.getString("car_type"));
+                    user.setLicenseNumber(rs.getString("license_number"));
+                }
+                
                 return user;
             }
             return null;

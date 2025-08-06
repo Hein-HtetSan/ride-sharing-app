@@ -20,6 +20,10 @@ public class UserServiceRmiClient {
         rmiUser.setPhone(user.getPhone());
         if (user.getUserType() != null) {
             rmiUser.setUserType(com.rsrmi.ride_sharing_api.rmi.models.User.UserType.valueOf(user.getUserType().name()));
+            if (user.getUserType() == User.UserType.DRIVER) {
+                rmiUser.setCarType(user.getCarType());
+                rmiUser.setLicenseNumber(user.getLicenseNumber());
+            }
         }
         return userService.registerUser(rmiUser);
     }

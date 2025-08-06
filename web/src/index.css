@@ -2,37 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Leaflet CSS */
-@import 'leaflet/dist/leaflet.css';
-
-/* Force Leaflet CSS to load properly */
-.leaflet-container {
-  height: 100% !important;
-  width: 100% !important;
-  font-family: 'Inter', system-ui, sans-serif !important;
-}
-
-.leaflet-tile-pane {
-  z-index: 1 !important;
-}
-
-.leaflet-map-pane {
-  z-index: auto !important;
-}
-
-.leaflet-control-container {
-  position: relative !important;
-}
-
-/* Fix for missing tiles */
-.leaflet-tile {
-  max-width: none !important;
-}
-
-.leaflet-tile-container {
-  overflow: visible !important;
-}
-
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -136,60 +105,134 @@
     min-height: 44px;
     min-width: 44px;
   }
+  
+  /* Fix for zoom-in/zoom-out issues on mobile */
+  .zoom-stable {
+    position: fixed !important;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+  }
+  
+  /* Prevent zoom bounce effect on iOS */
+  .no-zoom-bounce {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Ensure proper z-index layering for Leaflet maps */
+  .leaflet-container {
+    z-index: 1 !important;
+    position: relative !important;
+  }
+  
+  .leaflet-map-wrapper {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+  
+  .leaflet-control-container {
+    z-index: 10 !important;
+    pointer-events: none;
+  }
+  
+  .leaflet-control-container .leaflet-control {
+    pointer-events: auto;
+  }
+  
+  .leaflet-pane {
+    z-index: auto !important;
+  }
+  
+  .leaflet-map-pane {
+    z-index: 1 !important;
+  }
+  
+  /* Ensure map container doesn't block overlays */
+  .leaflet-container,
+  .leaflet-container * {
+    position: relative !important;
+  }
+  
+  /* Map overlay elements hierarchy - higher numbers are on top */
+  .map-overlay-bottom {
+    z-index: 1000 !important;
+    position: fixed !important;
+    pointer-events: auto !important;
+    background: transparent;
+  }
+  
+  .map-overlay-controls {
+    z-index: 1100 !important;
+    position: fixed !important;
+    pointer-events: auto !important;
+  }
+  
+  .map-overlay-suggestions {
+    z-index: 1200 !important;
+    position: absolute !important;
+    pointer-events: auto !important;
+  }
+  
+  .map-overlay-modal {
+    z-index: 1300 !important;
+    position: fixed !important;
+    pointer-events: auto !important;
+  }
+  
+  /* Desktop specific adjustments */
+  @media (min-width: 768px) {
+    .map-overlay-controls {
+      right: 1rem !important;
+    }
+    
+    .map-overlay-bottom {
+      max-width: 24rem; /* 384px */
+    }
+  }
 }
 
-/* Leaflet Map Customizations */
-.leaflet-container {
-  font-family: 'Inter', system-ui, sans-serif;
+/* Google Maps Styles - Clean and Professional */
+.google-map-container {
   height: 100% !important;
   width: 100% !important;
-}
-
-/* Ensure map tiles load properly */
-.leaflet-tile {
-  max-width: none !important;
-}
-
-.leaflet-tile-container {
-  overflow: visible !important;
-}
-
-/* Fix for map not showing tiles */
-.leaflet-map-pane {
-  z-index: auto;
-}
-
-.leaflet-control-container {
-  position: relative;
-}
-
-/* Custom marker styles */
-.custom-div-icon {
-  background: transparent;
-  border: none;
-}
-
-/* Leaflet popup customizations */
-.leaflet-popup-content-wrapper {
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
-.leaflet-popup-content {
-  margin: 12px;
-  line-height: 1.4;
+/* Google Maps watermark removal */
+.google-map-container a[href*="maps.google.com/maps?ll="],
+.google-map-container a[href*="google.com/maps/place"] {
+  display: none !important;
 }
 
-/* Make leaflet controls more accessible on mobile */
-.leaflet-control-zoom a {
-  width: 36px;
-  height: 36px;
-  line-height: 36px;
-  font-size: 18px;
+.google-map-container .gm-style-cc {
+  display: none !important;
 }
 
-/* Attribution styling */
-.leaflet-control-attribution {
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
+.google-map-container .gmnoprint {
+  display: none !important;
+}
+
+.google-map-container .gm-bundled-control-on-bottom {
+  display: none !important;
+}
+
+.google-map-container .gm-style .gmnoprint,
+.google-map-container .gm-style .gm-style-cc {
+  display: none !important;
+}
+
+/* Hide Google logo and terms */
+.google-map-container a[title="Open this area in Google Maps (opens a new window)"],
+.google-map-container a[title="Click to see this area on Google Maps"] {
+  display: none !important;
+}
+
+/* More specific selectors for development watermark */
+.google-map-container [style*="position: absolute"][style*="z-index: 1000000"] {
+  display: none !important;
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
+import { OpenStreetMapProvider } from './components/Maps/OpenStreetMapProvider';
 import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
 import RiderDashboard from './components/Rider/RiderDashboard';
@@ -28,20 +29,24 @@ function AuthWrapper() {
       <Route path="/login/driver" element={!isAuthenticated ? <LoginForm userType="DRIVER" /> : <Navigate to="/driver" replace />} />
       <Route path="/register/rider" element={!isAuthenticated ? <RegisterForm userType="RIDER" /> : <Navigate to="/rider" replace />} />
       <Route path="/register/driver" element={!isAuthenticated ? <RegisterForm userType="DRIVER" /> : <Navigate to="/driver" replace />} />
-      
+
       {/* Protected dashboard routes */}
       <Route path="/rider" element={
         <ProtectedRoute>
-          <LocationProvider>
-            {isRider ? <RiderDashboard /> : <Navigate to="/driver" replace />}
-          </LocationProvider>
+          <OpenStreetMapProvider routingService="osrm">
+            <LocationProvider>
+              {isRider ? <RiderDashboard /> : <Navigate to="/driver" replace />}
+            </LocationProvider>
+          </OpenStreetMapProvider>
         </ProtectedRoute>
       } />
       <Route path="/driver" element={
         <ProtectedRoute>
-          <LocationProvider>
-            {isDriver ? <DriverDashboard /> : <Navigate to="/rider" replace />}
-          </LocationProvider>
+          <OpenStreetMapProvider routingService="osrm">
+            <LocationProvider>
+              {isDriver ? <DriverDashboard /> : <Navigate to="/rider" replace />}
+            </LocationProvider>
+          </OpenStreetMapProvider>
         </ProtectedRoute>
       } />
       
@@ -55,9 +60,11 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="App">
-          <AuthWrapper />
-        </div>
+        <OpenStreetMapProvider routingService="osrm">
+          <div className="App">
+            <AuthWrapper />
+          </div>
+        </OpenStreetMapProvider>
       </AuthProvider>
     </Router>
   );

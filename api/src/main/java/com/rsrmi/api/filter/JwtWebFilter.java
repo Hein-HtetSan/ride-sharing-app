@@ -15,7 +15,15 @@ public class JwtWebFilter implements WebFilter {
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         // Protect /api/v1/users/get and /api/v1/users/update (expand as needed)
-        if (path.startsWith("/api/v1/users/get") || path.startsWith("/api/v1/users/update")) {
+        if (
+            path.startsWith("/api/v1/users/get") ||
+            path.startsWith("/api/v1/users/update") ||
+            path.startsWith("/api/v1/users/location") ||
+            path.startsWith("/api/v1/users/{userId}/location") ||
+
+            path.startsWith("/api/v1/drivers/get") ||
+            path.startsWith("api/v1/drivers/update")
+        ) {
             String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);

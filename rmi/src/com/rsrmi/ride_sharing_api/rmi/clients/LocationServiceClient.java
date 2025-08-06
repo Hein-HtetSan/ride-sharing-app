@@ -1,7 +1,7 @@
 package com.rsrmi.ride_sharing_api.rmi.clients;
 
 import com.rsrmi.ride_sharing_api.rmi.interfaces.LocationService;
-import com.rsrmi.ride_sharing_api.rmi.models.Location;
+import com.rsrmi.ride_sharing_api.rmi.models.UserLocation;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.Scanner;

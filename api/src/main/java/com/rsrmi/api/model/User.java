@@ -9,6 +9,9 @@ public class User implements Serializable {
     private String password;
     private String phone;
     private UserType userType;
+    // Driver-specific fields
+    private String carType;
+    private String licenseNumber;
 
     public enum UserType {
         RIDER, DRIVER, ADMIN
@@ -24,6 +27,17 @@ public class User implements Serializable {
         this.password = password;
         this.phone = phone;
         this.userType = userType;
+    }
+
+    // Constructor for drivers with car details
+    public User(int id, String username, String password, String phone, UserType userType, String carType, String licenseNumber) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+        this.phone = phone;
+        this.userType = userType;
+        this.carType = carType;
+        this.licenseNumber = licenseNumber;
     }
 
     // Getters and Setters
@@ -67,6 +81,22 @@ public class User implements Serializable {
         return this.userType;
     }
 
+    public String getCarType() {
+        return this.carType;
+    }
+
+    public void setCarType(String carType) {
+        this.carType = carType;
+    }
+
+    public String getLicenseNumber() {
+        return this.licenseNumber;
+    }
+
+    public void setLicenseNumber(String licenseNumber) {
+        this.licenseNumber = licenseNumber;
+    }
+
     @Override
     public String toString() {
         return "User{" +
@@ -74,6 +104,9 @@ public class User implements Serializable {
                 ", username='" + username + '\'' +
                 ", phone='" + phone + '\'' +
                 ", userType=" + userType +
+                (userType == UserType.DRIVER ?
+                    ", carType='" + carType + '\'' +
+                    ", licenseNumber='" + licenseNumber + '\'' : "") +
                 '}';
     }
 }

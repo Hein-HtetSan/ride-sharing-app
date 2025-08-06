@@ -1,74 +1,62 @@
 import { Location } from '../types';
 
-// Simple geocoding service using browser's geolocation and fallback data
+// Real-time geocoding service using browser's geolocation and Nominatim API
 export class LocationService {
-  // Mock locations for Myanmar (Yangon area) for demonstration
-  private static mockLocations: Location[] = [
-    {
-      lat: 16.8661,
-      lng: 96.1951,
-      address: "Sule Pagoda, Yangon, Myanmar",
-      streetName: "Sule Pagoda Road",
-      city: "Yangon",
-      country: "Myanmar",
-      postalCode: "11181"
-    },
-    {
-      lat: 16.8409,
-      lng: 96.1735,
-      address: "Bogyoke Aung San Market, Yangon, Myanmar",
-      streetName: "Bogyoke Aung San Road",
-      city: "Yangon",
-      country: "Myanmar",
-      postalCode: "11182"
-    },
-    {
-      lat: 16.8631,
-      lng: 96.1895,
-      address: "Yangon Central Railway Station, Myanmar",
-      streetName: "Bo Aung Kyaw Street",
-      city: "Yangon",
-      country: "Myanmar",
-      postalCode: "11181"
-    },
-    {
-      lat: 16.8700,
-      lng: 96.2000,
-      address: "Kandawgyi Lake, Yangon, Myanmar",
-      streetName: "Kandawgyi Garden Street",
-      city: "Yangon",
-      country: "Myanmar",
-      postalCode: "11181"
-    },
-    {
-      lat: 16.8500,
-      lng: 96.1800,
-      address: "Yangon University, Myanmar",
-      streetName: "University Avenue Road",
-      city: "Yangon",
-      country: "Myanmar",
-      postalCode: "11041"
-    }
-  ];
-
   static async getCurrentLocation(): Promise<Location> {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported'));
+        console.error('LocationService: Geolocation not supported by this browser');
+        reject(new Error('Geolocation not supported by this browser'));
         return;
       }
 
+      console.log('LocationService: Requesting FRESH geolocation with high accuracy...');
+      console.log('LocationService: Geolocation options:', {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      });
+      
       navigator.geolocation.getCurrentPosition(
         async (position) => {
+          console.log('LocationService: Raw geolocation success:', {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp,
+            timestampFormatted: new Date(position.timestamp).toLocaleString(),
+            heading: position.coords.heading,
+            speed: position.coords.speed,
+            altitudeAccuracy: position.coords.altitudeAccuracy
+          });
+          
+          // Check if this is a stale/cached reading
+          const locationAge = Date.now() - position.timestamp;
+          console.log(`LocationService: GPS reading age: ${locationAge}ms (${Math.round(locationAge/1000)}s)`);
+          
+          if (locationAge > 60000) { // More than 1 minute old
+            console.warn('LocationService: GPS reading is older than 1 minute - this might be cached data!');
+          }
+          
           const { latitude: lat, longitude: lng } = position.coords;
+          
+          // Validate coordinates
+          if (lat === 0 && lng === 0) {
+            console.error('LocationService: Invalid coordinates (0,0) received');
+            reject(new Error('Invalid location coordinates received'));
+            return;
+          }
           
           // Try to get address from reverse geocoding
           try {
+            console.log(`LocationService: Attempting reverse geocoding for ${lat}, ${lng}`);
             const location = await this.reverseGeocode(lat, lng);
+            console.log('LocationService: Reverse geocoding success:', location);
             resolve(location);
           } catch (error) {
+            console.warn('LocationService: Reverse geocoding failed, using coordinates only:', error);
             // Fallback to coordinates only
-            resolve({
+            const coordLocation = {
               lat,
               lng,
               address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
@@ -76,67 +64,146 @@ export class LocationService {
               city: 'Unknown',
               country: 'Unknown',
               postalCode: undefined
-            });
+            };
+            console.log('LocationService: Resolving with coordinate-only location:', coordLocation);
+            resolve(coordLocation);
           }
         },
         (error) => {
-          // Fallback to default location (Yangon)
-          resolve(this.mockLocations[0]);
+          console.warn('LocationService: Geolocation failed:', {
+            code: error.code,
+            message: error.message,
+            PERMISSION_DENIED: error.code === 1,
+            POSITION_UNAVAILABLE: error.code === 2,
+            TIMEOUT: error.code === 3
+          });
+          
+          let errorMessage = 'Unknown geolocation error';
+          
+          if (error.code === 1) {
+            errorMessage = 'Location permission denied. Please enable location access in your browser.';
+            console.log('LocationService: Permission denied - please allow location access in browser settings');
+          } else if (error.code === 2) {
+            errorMessage = 'Location unavailable. Please check your GPS/internet connection.';
+            console.log('LocationService: Position unavailable - check GPS/internet connection');
+          } else if (error.code === 3) {
+            errorMessage = 'Location request timeout. Please try again.';
+            console.log('LocationService: Location request timeout');
+          }
+          
+          console.error('LocationService: Unable to get location');
+          reject(new Error(errorMessage));
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000 // 5 minutes
+          timeout: 15000, // 15 seconds timeout
+          maximumAge: 0 // FORCE FRESH GPS - no cached data
         }
       );
     });
   }
 
   static async reverseGeocode(lat: number, lng: number): Promise<Location> {
-    // Try using a free geocoding service as fallback
     try {
+      // Use Nominatim reverse geocoding (OpenStreetMap's free service)
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'RideSharingApp/1.0'
+          }
+        }
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         
-        return {
-          lat,
-          lng,
-          address: data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-          streetName: data.address?.road || data.address?.street,
-          city: data.address?.city || data.address?.town || data.address?.village,
-          country: data.address?.country,
-          postalCode: data.address?.postcode
-        };
+        if (data && data.display_name) {
+          return {
+            lat,
+            lng,
+            address: data.display_name,
+            streetName: data.address?.road,
+            city: data.address?.city || data.address?.town || data.address?.village,
+            country: data.address?.country,
+            postalCode: data.address?.postcode
+          };
+        }
       }
+      
+      console.warn('Nominatim reverse geocoding failed');
+      
+      // Fallback to coordinates
+      return {
+        lat,
+        lng,
+        address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        streetName: undefined,
+        city: undefined,
+        country: undefined,
+        postalCode: undefined
+      };
     } catch (error) {
-      console.warn('Reverse geocoding failed:', error);
+      console.error('Reverse geocoding error:', error);
+      
+      // Fallback to coordinates
+      return {
+        lat,
+        lng,
+        address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        streetName: undefined,
+        city: undefined,
+        country: undefined,
+        postalCode: undefined
+      };
     }
-
-    // Fallback to basic location
-    return {
-      lat,
-      lng,
-      address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-      streetName: undefined,
-      city: undefined,
-      country: undefined,
-      postalCode: undefined
-    };
   }
 
-  static searchLocations(query: string): Location[] {
+  static async searchLocations(query: string): Promise<Location[]> {
     if (!query || query.length < 2) return [];
     
-    const lowercaseQuery = query.toLowerCase();
-    return this.mockLocations.filter(location =>
-      location.address.toLowerCase().includes(lowercaseQuery) ||
-      location.city?.toLowerCase().includes(lowercaseQuery) ||
-      location.streetName?.toLowerCase().includes(lowercaseQuery)
-    );
+    try {
+      // Use Nominatim search API for real-time location search
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'RideSharingApp/1.0'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        return data.map((result: {
+          lat: string;
+          lon: string;
+          display_name: string;
+          address?: {
+            road?: string;
+            city?: string;
+            town?: string;
+            village?: string;
+            country?: string;
+            postcode?: string;
+          };
+        }) => ({
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          address: result.display_name,
+          streetName: result.address?.road,
+          city: result.address?.city || result.address?.town || result.address?.village,
+          country: result.address?.country,
+          postalCode: result.address?.postcode
+        }));
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Location search error:', error);
+      return [];
+    }
   }
 
   static calculateDistance(loc1: Location, loc2: Location): number {
