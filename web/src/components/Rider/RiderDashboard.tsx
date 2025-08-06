@@ -7,6 +7,7 @@ import { LocationService } from '../../services/locationService';
 import Header from '../Layout/Header';
 import { OpenStreetMap, LocationSearch } from '../Maps';
 
+
 const RiderDashboard: React.FC = () => {
   const [destination, setDestination] = useState('');
   const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
@@ -18,6 +19,7 @@ const RiderDashboard: React.FC = () => {
   const [estimatedDuration, setEstimatedDuration] = useState<string>('');
   const [correctLocation, setCorrectLocation] = useState<Location | null>(null);
 
+
   const { currentLocation, requestDirectGPS } = useLocation();
 
   // Initialize with correct GPS location on component mount
@@ -28,35 +30,28 @@ const RiderDashboard: React.FC = () => {
         const freshGPS = await requestDirectGPS();
         console.log('✅ INITIALIZATION - Got GPS:', freshGPS);
         if (freshGPS) {
-          setCorrectLocation(freshGPS);
-          console.log('✅ INITIALIZATION - Set location in state');
+          // Fetch address using reverse geocoding
+          try {
+            const withAddress = await LocationService.reverseGeocode(freshGPS.lat, freshGPS.lng);
+            setCorrectLocation(withAddress);
+            console.log('✅ INITIALIZATION - Set location with address in state');
+          } catch (err) {
+            setCorrectLocation(freshGPS);
+            console.warn('⚠️ INITIALIZATION - Failed to get address, using lat/lng only');
+          }
         }
       } catch (error) {
         console.error('❌ INITIALIZATION - Failed to get GPS:', error);
       }
     };
-
     initializeCorrectLocation();
   }, [requestDirectGPS]);
 
-  // Use GPS location as primary source
+  // Create swapped version of location if needed
+
   const displayLocation = correctLocation || currentLocation;
 
-  // Debug: Log location status
-  console.log('🔍 RiderDashboard - GPS location:', correctLocation);
-  console.log('🔍 RiderDashboard - Context location:', currentLocation);
-  console.log('🔍 RiderDashboard - Display location:', displayLocation);
-  
-  if (displayLocation) {
-    console.log('🔍 RiderDashboard - DISPLAY COORDINATES:', {
-      lat: displayLocation.lat,
-      lng: displayLocation.lng,
-      address: displayLocation.address,
-      city: displayLocation.city,
-      source: correctLocation ? 'GPS location' : 'Context location',
-      coordinates: `${displayLocation.lat}, ${displayLocation.lng}`
-    });
-  }
+
 
   // Add location refresh handler
   const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
@@ -64,20 +59,21 @@ const RiderDashboard: React.FC = () => {
   
   const handleRefreshLocation = async () => {
     if (isRefreshingLocation) return;
-    
     console.log('🛰️ RELOCATE BUTTON - Getting fresh GPS location...');
     setLocationError('');
-    
     try {
       setIsRefreshingLocation(true);
-      
       const freshGPS = await requestDirectGPS();
       console.log('✅ RELOCATE - Fresh GPS result:', freshGPS);
-      
       if (freshGPS) {
-        setCorrectLocation(freshGPS);
-        console.log('✅ RELOCATE - Updated location');
-        
+        try {
+          const withAddress = await LocationService.reverseGeocode(freshGPS.lat, freshGPS.lng);
+          setCorrectLocation(withAddress);
+          console.log('✅ RELOCATE - Updated location with address');
+        } catch (err) {
+          setCorrectLocation(freshGPS);
+          console.warn('⚠️ RELOCATE - Failed to get address, using lat/lng only');
+        }
         // Reload nearby drivers after location update
         setTimeout(() => {
           loadNearbyDrivers();
@@ -85,7 +81,6 @@ const RiderDashboard: React.FC = () => {
       } else {
         throw new Error('requestDirectGPS returned null');
       }
-      
     } catch (error) {
       console.error('❌ RELOCATE - GPS failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown location error';
@@ -167,6 +162,8 @@ const RiderDashboard: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden no-zoom-bounce">
       <Header title="Book a Ride" />
+      
+
       
       <div className="flex-1 relative overflow-hidden map-full-height">
         {displayLocation ? (
@@ -274,7 +271,7 @@ const RiderDashboard: React.FC = () => {
         {/* Bottom Panel */}
         <div className="map-overlay-bottom pb-4 zoom-stable 
                         fixed bottom-8 left-4 right-4 
-                        md:top-20 md:left-4 md:right-auto md:w-96">
+                        md:top-16 md:left-12 md:right-auto md:w-96">
           <div className="px-4 md:px-0">
             <div className="w-full max-w-sm mx-auto md:max-w-none md:mx-0 bg-white rounded-2xl shadow-2xl no-zoom-bounce">
               <div className="p-4 pb-safe">
@@ -288,6 +285,9 @@ const RiderDashboard: React.FC = () => {
                     <p className="text-sm text-gray-700 truncate">
                       {displayLocation?.address || 'Getting your location...'}
                     </p>
+                    {displayLocation?.city && (
+                      <p className="text-xs text-gray-500">{displayLocation.city}</p>
+                    )}
                     {correctLocation && (
                       <p className="text-xs text-blue-600 mt-1">📍 Using GPS location</p>
                     )}

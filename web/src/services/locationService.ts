@@ -59,7 +59,7 @@ export class LocationService {
             const coordLocation = {
               lat,
               lng,
-              address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+              address: `${lat}, ${lng}`,
               streetName: undefined,
               city: 'Unknown',
               country: 'Unknown',
@@ -137,7 +137,7 @@ export class LocationService {
       return {
         lat,
         lng,
-        address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        address: `${lat}, ${lng}`,
         streetName: undefined,
         city: undefined,
         country: undefined,
@@ -150,7 +150,7 @@ export class LocationService {
       return {
         lat,
         lng,
-        address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        address: `${lat}, ${lng}`,
         streetName: undefined,
         city: undefined,
         country: undefined,

@@ -7,6 +7,7 @@ interface LocationContextType {
   updateLocation: (location: Location) => void;
   requestLocation: () => Promise<Location | null>;
   requestDirectGPS: () => Promise<Location | null>;
+  swapLatLng: () => void;
   isLocationEnabled: boolean;
 }
 
@@ -55,6 +56,22 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     setCurrentLocation(location);
   };
 
+  const swapLatLng = () => {
+    if (currentLocation) {
+      const swappedLocation: Location = {
+        ...currentLocation,
+        lat: currentLocation.lng,
+        lng: currentLocation.lat,
+        address: `${currentLocation.lng}, ${currentLocation.lat}`,
+      };
+      console.log('🔄 LocationContext: Swapping lat/lng:', {
+        original: `${currentLocation.lat}, ${currentLocation.lng}`,
+        swapped: `${swappedLocation.lat}, ${swappedLocation.lng}`
+      });
+      setCurrentLocation(swappedLocation);
+    }
+  };
+
   const requestDirectGPS = useCallback(async (): Promise<Location | null> => {
     console.log('🛰️ LocationContext: requestDirectGPS - bypassing LocationService, going DIRECT to browser GPS...');
     
@@ -76,16 +93,39 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
             accuracy: position.coords.accuracy,
             timestamp: position.timestamp,
             timestampAge: `${Date.now() - position.timestamp}ms ago`,
-            timestampFormatted: new Date(position.timestamp).toLocaleString()
+            timestampFormatted: new Date(position.timestamp).toLocaleString(),
+            coordinates_check: {
+              lat_seems_correct: position.coords.latitude > 0 && position.coords.latitude < 90,
+              lng_seems_correct: position.coords.longitude > 0 && position.coords.longitude < 180,
+              might_be_swapped: position.coords.latitude > 90 || position.coords.longitude > 90
+            }
           });
 
           const directLocation: Location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-            address: `DIRECT GPS: ${position.coords.latitude}, ${position.coords.longitude}`,
-            city: 'Direct GPS Reading',
+            address: `${position.coords.latitude}, ${position.coords.longitude}`,
+            city: 'GPS Location',
             country: undefined
           };
+
+          // Check if coordinates might be wrong
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
+          console.log('🔍 DirectGPS: Coordinate Analysis:', {
+            lat_value: lat,
+            lng_value: lng,
+            lat_range: lat >= -90 && lat <= 90 ? 'Valid' : 'INVALID',
+            lng_range: lng >= -180 && lng <= 180 ? 'Valid' : 'INVALID',
+            might_need_swap: Math.abs(lat) > Math.abs(lng) && Math.abs(lng) < 90,
+            location_region: {
+              northern_hemisphere: lat > 0,
+              southern_hemisphere: lat < 0,
+              eastern_hemisphere: lng > 0,
+              western_hemisphere: lng < 0
+            }
+          });
 
           console.log('🛰️ DirectGPS: Setting location to:', directLocation);
           setCurrentLocation(directLocation);
@@ -130,6 +170,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     updateLocation,
     requestLocation,
     requestDirectGPS,
+    swapLatLng,
     isLocationEnabled,
   };
 
