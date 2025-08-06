@@ -2,6 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import Leaflet CSS */
+@import 'leaflet/dist/leaflet.css';
+
+/* Force Leaflet CSS to load properly */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.leaflet-tile-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-map-pane {
+  z-index: auto !important;
+}
+
+.leaflet-control-container {
+  position: relative !important;
+}
+
+/* Fix for missing tiles */
+.leaflet-tile {
+  max-width: none !important;
+}
+
+.leaflet-tile-container {
+  overflow: visible !important;
+}
+
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -9,6 +40,28 @@
   
   body {
     @apply antialiased;
+    /* Prevent overscroll on mobile */
+    overscroll-behavior: none;
+  }
+  
+  /* Full height for mobile - but only when needed */
+  html, body {
+    height: 100%;
+  }
+  
+  #root {
+    min-height: 100%;
+  }
+  
+  /* Full screen container for maps */
+  .full-screen-map-container {
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  /* Map height calculation: 100vh - header height */
+  .map-full-height {
+    height: calc(100vh - 3.5rem); /* 3.5rem = h-14 (56px) */
   }
 }
 
@@ -28,4 +81,115 @@
   .input-field {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
   }
+  
+  /* Safe area support for mobile devices */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Full screen container */
+  .h-screen-mobile {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile */
+  }
+  
+  /* Grab handle for bottom sheets */
+  .grab-handle {
+    width: 48px;
+    height: 4px;
+    background-color: #d1d5db;
+    border-radius: 2px;
+    margin: 0 auto;
+  }
+  
+  /* Smooth transitions for mobile interactions */
+  .mobile-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar for webkit browsers */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Touch-friendly tap targets */
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Leaflet Map Customizations */
+.leaflet-container {
+  font-family: 'Inter', system-ui, sans-serif;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Ensure map tiles load properly */
+.leaflet-tile {
+  max-width: none !important;
+}
+
+.leaflet-tile-container {
+  overflow: visible !important;
+}
+
+/* Fix for map not showing tiles */
+.leaflet-map-pane {
+  z-index: auto;
+}
+
+.leaflet-control-container {
+  position: relative;
+}
+
+/* Custom marker styles */
+.custom-div-icon {
+  background: transparent;
+  border: none;
+}
+
+/* Leaflet popup customizations */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.leaflet-popup-content {
+  margin: 12px;
+  line-height: 1.4;
+}
+
+/* Make leaflet controls more accessible on mobile */
+.leaflet-control-zoom a {
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+  font-size: 18px;
+}
+
+/* Attribution styling */
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
 }

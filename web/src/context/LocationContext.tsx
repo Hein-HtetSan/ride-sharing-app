@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Location } from '../types';
+import { LocationService } from '../services/locationService';
 
 interface LocationContextType {
   currentLocation: Location | null;
@@ -26,44 +27,18 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [isLocationEnabled, setIsLocationEnabled] = useState(false);
 
-  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
-    // In production, integrate with Google Maps Geocoding API
-    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-  };
-
-  const requestLocation = async (): Promise<Location | null> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported'));
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          const address = await reverseGeocode(latitude, longitude);
-          
-          const location: Location = {
-            lat: latitude,
-            lng: longitude,
-            address,
-          };
-
-          setCurrentLocation(location);
-          setIsLocationEnabled(true);
-          resolve(location);
-        },
-        (error) => {
-          reject(error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
-        }
-      );
-    });
-  };
+  const requestLocation = useCallback(async (): Promise<Location | null> => {
+    try {
+      const location = await LocationService.getCurrentLocation();
+      setCurrentLocation(location);
+      setIsLocationEnabled(true);
+      return location;
+    } catch (error) {
+      console.error('Failed to get location:', error);
+      setIsLocationEnabled(false);
+      return null;
+    }
+  }, []);
 
   const updateLocation = (location: Location) => {
     setCurrentLocation(location);
@@ -71,8 +46,15 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   useEffect(() => {
     // Request location on mount
-    requestLocation().catch(console.error);
-  }, []);
+    const initLocation = async () => {
+      try {
+        await requestLocation();
+      } catch (error) {
+        console.error('Failed to get initial location:', error);
+      }
+    };
+    initLocation();
+  }, [requestLocation]);
 
   const value = {
     currentLocation,

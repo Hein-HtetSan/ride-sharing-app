@@ -1,18 +1,20 @@
 export interface User {
-  id: string;
-  email: string;
-  name: string;
+  id: number;
+  username: string;
   phone: string;
-  userType: 'rider' | 'driver';
-  isActive?: boolean;
+  userType: 'RIDER' | 'DRIVER';
+  password?: string | null;
 }
 
 export interface Driver extends User {
   vehicleType: string;
-  vehicleNumber: string;
-  location: Location;
+  vehicleNumber?: string;
+  location?: Location;
+  currentLocation?: Location; // Backend returns this field
   isAvailable: boolean;
   rating: number;
+  username: string; // Add username for display
+  minutesAway?: number;
 }
 
 export interface Rider extends User {
@@ -23,6 +25,10 @@ export interface Location {
   lat: number;
   lng: number;
   address: string;
+  streetName?: string;
+  city?: string;
+  country?: string;
+  postalCode?: string;
 }
 
 export interface Ride {

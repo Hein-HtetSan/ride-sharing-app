@@ -1,14 +1,43 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Car, Users, MapPin, Shield, Clock, DollarSign } from 'lucide-react';
 
-interface LandingPageProps {
-  onRiderSignup: () => void;
-  onDriverSignup: () => void;
-}
+const LandingPage: React.FC = () => {
+  const navigate = useNavigate();
 
-const LandingPage: React.FC<LandingPageProps> = ({ onRiderSignup, onDriverSignup }) => {
+  const handleRiderSignup = () => navigate('/register/rider');
+  const handleDriverSignup = () => navigate('/register/driver');
+  const handleRiderLogin = () => navigate('/login/rider');
+  const handleDriverLogin = () => navigate('/login/driver');
+
   return (
     <div className="min-h-screen bg-white">
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-2">
+              <Car className="h-8 w-8 text-blue-600" />
+              <span className="text-xl font-bold text-gray-900">RideShare</span>
+            </div>
+            <div className="flex space-x-4">
+              <button
+                onClick={handleRiderLogin}
+                className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+              >
+                Rider Login
+              </button>
+              <button
+                onClick={handleDriverLogin}
+                className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+              >
+                Driver Login
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,7 +60,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRiderSignup, onDriverSignup
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
-                onClick={onRiderSignup}
+                onClick={handleRiderSignup}
                 className="bg-white text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-50 transition-colors duration-200 flex items-center justify-center space-x-2"
               >
                 <Users className="h-6 w-6" />
@@ -39,7 +68,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRiderSignup, onDriverSignup
               </button>
               
               <button
-                onClick={onDriverSignup}
+                onClick={handleDriverSignup}
                 className="bg-blue-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-400 transition-colors duration-200 flex items-center justify-center space-x-2 border-2 border-blue-400"
               >
                 <Car className="h-6 w-6" />
@@ -138,14 +167,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRiderSignup, onDriverSignup
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={onRiderSignup}
+              onClick={handleRiderSignup}
               className="bg-white text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-50 transition-colors duration-200"
             >
               Start Riding
             </button>
             
             <button
-              onClick={onDriverSignup}
+              onClick={handleDriverSignup}
               className="bg-blue-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-400 transition-colors duration-200 border-2 border-blue-400"
             >
               Start Driving

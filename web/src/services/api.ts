@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { User, Driver, Rider, Ride, RideRequest, Location } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:8080/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -20,21 +20,18 @@ api.interceptors.request.use((config) => {
 });
 
 export const authAPI = {
-  login: async (email: string, password: string, userType: 'rider' | 'driver') => {
-    const response = await api.post('/auth/login', { email, password, userType });
+  login: async (phone: string, password: string) => {
+    const response = await api.post(`/users/login?phone=${encodeURIComponent(phone)}&password=${encodeURIComponent(password)}`);
     return response.data;
   },
 
   register: async (userData: {
-    name: string;
-    email: string;
-    password: string;
+    username: string;
     phone: string;
-    userType: 'rider' | 'driver';
-    vehicleType?: string;
-    vehicleNumber?: string;
+    password: string;
+    userType: 'RIDER' | 'DRIVER';
   }) => {
-    const response = await api.post('/auth/register', userData);
+    const response = await api.post('/users/register', userData);
     return response.data;
   },
 

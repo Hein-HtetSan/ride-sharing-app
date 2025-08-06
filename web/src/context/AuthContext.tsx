@@ -53,8 +53,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     isAuthenticated: !!user,
-    isDriver: user?.userType === 'driver',
-    isRider: user?.userType === 'rider',
+    isDriver: user?.userType === 'DRIVER',
+    isRider: user?.userType === 'RIDER',
   };
 
   return (

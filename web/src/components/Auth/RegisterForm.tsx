@@ -1,24 +1,23 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Car, UserCheck } from 'lucide-react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 interface RegisterFormProps {
-  userType: 'rider' | 'driver';
-  onSuccess: () => void;
-  onSwitchToLogin: () => void;
+  userType: 'RIDER' | 'DRIVER';
 }
 
-const RegisterForm: React.FC<RegisterFormProps> = ({ userType, onSuccess, onSwitchToLogin }) => {
+const RegisterForm: React.FC<RegisterFormProps> = ({ userType }) => {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
+    username: '',
+    phone: '',
     password: '',
     confirmPassword: '',
-    phone: '',
     vehicleType: '',
     vehicleNumber: '',
   });
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,20 +37,19 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType, onSuccess, onSwit
 
     try {
       const registrationData = {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
+        username: formData.username,
         phone: formData.phone,
+        password: formData.password,
         userType,
-        ...(userType === 'driver' && {
+        ...(userType === 'DRIVER' && {
           vehicleType: formData.vehicleType,
           vehicleNumber: formData.vehicleNumber,
         }),
       };
 
       const response = await authAPI.register(registrationData);
-      login(response.user, response.token);
-      onSuccess();
+      login(response.data.user, response.data.token);
+      navigate(userType === 'DRIVER' ? '/driver' : '/rider');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
@@ -69,16 +67,24 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType, onSuccess, onSwit
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+        <button
+          type="button"
+          className="mb-4 flex items-center text-blue-600 hover:text-blue-800 font-medium"
+          onClick={() => navigate('/')}
+        >
+          <svg className="h-5 w-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
         <div className="text-center">
           <div className="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
-            {userType === 'driver' ? (
+            {userType === 'DRIVER' ? (
               <Car className="h-8 w-8 text-white" />
             ) : (
               <UserCheck className="h-8 w-8 text-white" />
             )}
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            {userType === 'driver' ? 'Driver' : 'Rider'} Sign Up
+            {userType === 'DRIVER' ? 'Driver' : 'Rider'} Sign Up
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Create your account to get started.
@@ -94,33 +100,17 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType, onSuccess, onSwit
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Full Name
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Username
               </label>
               <input
-                id="name"
-                name="name"
+                id="username"
+                name="username"
                 type="text"
                 required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter your full name"
-                value={formData.name}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter your email"
-                value={formData.email}
+                placeholder="Enter your username"
+                value={formData.username}
                 onChange={handleChange}
               />
             </div>
@@ -141,7 +131,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType, onSuccess, onSwit
               />
             </div>
 
-            {userType === 'driver' && (
+            {userType === 'DRIVER' && (
               <>
                 <div>
                   <label htmlFor="vehicleType" className="block text-sm font-medium text-gray-700">
@@ -241,7 +231,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType, onSuccess, onSwit
               Already have an account?{' '}
               <button
                 type="button"
-                onClick={onSwitchToLogin}
+                onClick={() => navigate(`/login/${userType.toLowerCase()}`)}
                 className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200"
               >
                 Sign in here

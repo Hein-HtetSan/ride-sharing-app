@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Car, UserCheck } from 'lucide-react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginFormProps {
-  userType: 'rider' | 'driver';
-  onSuccess: () => void;
-  onSwitchToRegister: () => void;
+  userType: 'RIDER' | 'DRIVER';
 }
 
-const LoginForm: React.FC<LoginFormProps> = ({ userType, onSuccess, onSwitchToRegister }) => {
+const LoginForm: React.FC<LoginFormProps> = ({ userType }) => {
   const [formData, setFormData] = useState({
-    email: '',
+    phone: '',
     password: '',
   });
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,9 +26,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ userType, onSuccess, onSwitchToRe
     setError('');
 
     try {
-      const response = await authAPI.login(formData.email, formData.password, userType);
-      login(response.user, response.token);
-      onSuccess();
+      const response = await authAPI.login(formData.phone, formData.password);
+      login(response.data.user, response.data.token);
+      navigate(userType === 'DRIVER' ? '/driver' : '/rider');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed. Please try again.');
     } finally {
@@ -46,16 +46,24 @@ const LoginForm: React.FC<LoginFormProps> = ({ userType, onSuccess, onSwitchToRe
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+        <button
+          type="button"
+          className="mb-4 flex items-center text-blue-600 hover:text-blue-800 font-medium"
+          onClick={() => navigate('/')}
+        >
+          <svg className="h-5 w-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
         <div className="text-center">
           <div className="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
-            {userType === 'driver' ? (
+            {userType === 'DRIVER' ? (
               <Car className="h-8 w-8 text-white" />
             ) : (
               <UserCheck className="h-8 w-8 text-white" />
             )}
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            {userType === 'driver' ? 'Driver' : 'Rider'} Sign In
+            {userType === 'DRIVER' ? 'Driver' : 'Rider'} Sign In
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Welcome back! Please sign in to your account.
@@ -71,17 +79,17 @@ const LoginForm: React.FC<LoginFormProps> = ({ userType, onSuccess, onSwitchToRe
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                Phone Number
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="phone"
+                name="phone"
+                type="text"
                 required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter your email"
-                value={formData.email}
+                placeholder="Enter your phone number"
+                value={formData.phone}
                 onChange={handleChange}
               />
             </div>
@@ -131,7 +139,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ userType, onSuccess, onSwitchToRe
               Don't have an account?{' '}
               <button
                 type="button"
-                onClick={onSwitchToRegister}
+                onClick={() => navigate(`/register/${userType.toLowerCase()}`)}
                 className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200"
               >
                 Sign up here

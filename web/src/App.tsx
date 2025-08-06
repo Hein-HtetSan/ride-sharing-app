@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
@@ -8,77 +8,46 @@ import RiderDashboard from './components/Rider/RiderDashboard';
 import DriverDashboard from './components/Driver/DriverDashboard';
 import LandingPage from './pages/LandingPage';
 
-type AuthMode = 'login' | 'register';
-type UserType = 'rider' | 'driver';
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
+}
 
 function AuthWrapper() {
-  const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [userType, setUserType] = useState<UserType>('rider');
-  const [showAuth, setShowAuth] = useState(false);
-
   const { isAuthenticated, isDriver, isRider } = useAuth();
 
-  if (isAuthenticated) {
-    return (
-      <LocationProvider>
-        <Routes>
-          <Route 
-            path="/" 
-            element={
-              isDriver ? (
-                <Navigate to="/driver" replace />
-              ) : (
-                <Navigate to="/rider" replace />
-              )
-            } 
-          />
-          <Route 
-            path="/rider" 
-            element={isRider ? <RiderDashboard /> : <Navigate to="/driver" replace />} 
-          />
-          <Route 
-            path="/driver" 
-            element={isDriver ? <DriverDashboard /> : <Navigate to="/rider" replace />} 
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </LocationProvider>
-    );
-  }
-
-  if (showAuth) {
-    return (
-      <>
-        {authMode === 'login' ? (
-          <LoginForm
-            userType={userType}
-            onSuccess={() => setShowAuth(false)}
-            onSwitchToRegister={() => setAuthMode('register')}
-          />
-        ) : (
-          <RegisterForm
-            userType={userType}
-            onSuccess={() => setShowAuth(false)}
-            onSwitchToLogin={() => setAuthMode('login')}
-          />
-        )}
-      </>
-    );
-  }
-
   return (
-    <LandingPage
-      onRiderSignup={() => {
-        setUserType('rider');
-        setAuthMode('register');
-        setShowAuth(true);
-      }}
-      onDriverSignup={() => {
-        setUserType('driver');
-        setAuthMode('register');
-        setShowAuth(true);
-      }}
-    />
+    <Routes>
+      {/* Landing page */}
+      <Route path="/" element={isAuthenticated ? (
+        isDriver ? <Navigate to="/driver" replace /> : <Navigate to="/rider" replace />
+      ) : <LandingPage />} />
+      
+      {/* Auth routes */}
+      <Route path="/login/rider" element={!isAuthenticated ? <LoginForm userType="RIDER" /> : <Navigate to="/rider" replace />} />
+      <Route path="/login/driver" element={!isAuthenticated ? <LoginForm userType="DRIVER" /> : <Navigate to="/driver" replace />} />
+      <Route path="/register/rider" element={!isAuthenticated ? <RegisterForm userType="RIDER" /> : <Navigate to="/rider" replace />} />
+      <Route path="/register/driver" element={!isAuthenticated ? <RegisterForm userType="DRIVER" /> : <Navigate to="/driver" replace />} />
+      
+      {/* Protected dashboard routes */}
+      <Route path="/rider" element={
+        <ProtectedRoute>
+          <LocationProvider>
+            {isRider ? <RiderDashboard /> : <Navigate to="/driver" replace />}
+          </LocationProvider>
+        </ProtectedRoute>
+      } />
+      <Route path="/driver" element={
+        <ProtectedRoute>
+          <LocationProvider>
+            {isDriver ? <DriverDashboard /> : <Navigate to="/rider" replace />}
+          </LocationProvider>
+        </ProtectedRoute>
+      } />
+      
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

@@ -127,4 +127,42 @@ public class UserController {
                     .body(new ApiResponse(false, "Error: " + e.getMessage()));
         }
     }
+
+    @PutMapping("/location")
+    @Operation(
+        summary = "Update user location",
+        description = "Update user's current location (JWT protected)",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse> updateLocation(@org.springframework.web.bind.annotation.RequestBody java.util.Map<String, Object> locationData) {
+        try {
+            // For now, just return success - this will be implemented with actual database logic later
+            return ResponseEntity.ok(new ApiResponse(true, "Location updated successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{userId}/location")
+    @Operation(
+        summary = "Get user location",
+        description = "Get user's current location (JWT protected)",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse> getUserLocation(@PathVariable String userId) {
+        try {
+            // Mock location data
+            java.util.Map<String, Object> location = new java.util.HashMap<>();
+            location.put("lat", 16.8661);
+            location.put("lng", 96.1951);
+            location.put("address", "Yangon, Myanmar");
+            location.put("updatedAt", new java.util.Date());
+            
+            return ResponseEntity.ok(new ApiResponse(true, "Location retrieved successfully", location));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, "Error: " + e.getMessage()));
+        }
+    }
 }
