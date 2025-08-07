@@ -34,9 +34,13 @@ const Header: React.FC<HeaderProps> = ({
             )}
             <div className="flex items-center ml-2">
               <MapPin className="h-6 w-6 text-blue-600" />
-              <h1 className="ml-2 text-lg font-bold text-gray-900">
+              <div className="ml-2 flex flex-col">
+                <span className="text-lg font-bold text-blue-600">RideWithUs</span>
+                <span className="text-xs text-gray-600 hidden md:block">{title}</span>
+              </div>
+              <span className="ml-2 text-sm font-medium text-gray-900 md:hidden">
                 {title}
-              </h1>
+              </span>
             </div>
           </div>
 

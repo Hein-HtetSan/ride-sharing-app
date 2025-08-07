@@ -110,7 +110,7 @@ export class LocationService {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'RideSharingApp/1.0'
+            'User-Agent': 'RideWithUs/1.0'
           }
         }
       );
@@ -168,7 +168,7 @@ export class LocationService {
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'RideSharingApp/1.0'
+            'User-Agent': 'RideWithUs/1.0'
           }
         }
       );
@@ -224,15 +224,33 @@ export class LocationService {
   }
 
   static estimateDuration(distanceKm: number): string {
-    // Simple estimation: average speed of 30 km/h in city
-    const hours = distanceKm / 30;
-    const minutes = Math.round(hours * 60);
+    // More realistic city driving speeds with different scenarios
+    let avgSpeedKmh: number;
     
-    if (minutes < 60) {
-      return `${minutes} min${minutes > 1 ? 's' : ''}`;
+    if (distanceKm < 2) {
+      // Short distances: lots of stops, traffic lights, pedestrians
+      avgSpeedKmh = 15; // 15 km/h for short city trips
+    } else if (distanceKm < 10) {
+      // Medium distances: mixed city traffic
+      avgSpeedKmh = 25; // 25 km/h for medium city trips
     } else {
-      const h = Math.floor(minutes / 60);
-      const m = minutes % 60;
+      // Longer distances: some highway/main roads
+      avgSpeedKmh = 35; // 35 km/h for longer trips with some fast roads
+    }
+    
+    const hours = distanceKm / avgSpeedKmh;
+    const totalMinutes = Math.round(hours * 60);
+    
+    // Ensure minimum realistic time
+    const finalMinutes = Math.max(totalMinutes, Math.round(distanceKm * 2)); // At least 2 minutes per km in heavy traffic
+    
+    console.log(`🕐 Duration calculation: ${distanceKm.toFixed(1)}km at ${avgSpeedKmh}km/h = ${finalMinutes} minutes`);
+    
+    if (finalMinutes < 60) {
+      return `${finalMinutes} min${finalMinutes > 1 ? 's' : ''}`;
+    } else {
+      const h = Math.floor(finalMinutes / 60);
+      const m = finalMinutes % 60;
       return `${h}h ${m > 0 ? m + 'm' : ''}`;
     }
   }

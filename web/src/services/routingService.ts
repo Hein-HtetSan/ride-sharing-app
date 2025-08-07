@@ -21,20 +21,25 @@ class RoutingService {
    */
   static async getRoute(start: Location, end: Location): Promise<RouteResponse> {
     try {
+      console.log('🛣️ RoutingService: Getting route from', start.address, 'to', end.address);
+      
       // Try OpenRouteService first
       if (this.ORS_API_KEY) {
+        console.log('✅ Using OpenRouteService with API key');
         return await this.getRouteFromORS(start, end);
       }
       
       // Fallback to GraphHopper
       if (this.GRAPHHOPPER_API_KEY) {
+        console.log('⚠️ Using GraphHopper fallback');
         return await this.getRouteFromGraphHopper(start, end);
       }
 
+      console.warn('⚠️ No API keys available, using straight line');
       // Ultimate fallback: simple straight line
       return this.getStraightLineRoute(start, end);
     } catch (error) {
-      console.warn('Routing service failed, using straight line:', error);
+      console.warn('❌ Routing service failed, using straight line:', error);
       return this.getStraightLineRoute(start, end);
     }
   }
@@ -45,6 +50,8 @@ class RoutingService {
   private static async getRouteFromORS(start: Location, end: Location): Promise<RouteResponse> {
     const url = `${this.ORS_BASE_URL}?api_key=${this.ORS_API_KEY}&start=${start.lng},${start.lat}&end=${end.lng},${end.lat}`;
     
+    console.log('🌐 ORS Request URL:', url.replace(this.ORS_API_KEY, '[API_KEY_HIDDEN]'));
+    
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
@@ -52,18 +59,35 @@ class RoutingService {
     });
 
     if (!response.ok) {
-      throw new Error(`ORS API error: ${response.status}`);
+      console.error('❌ ORS API Error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('❌ ORS Error details:', errorText);
+      throw new Error(`ORS API error: ${response.status} - ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('✅ ORS API Response received:', data);
+    
+    if (!data.features || !data.features[0]) {
+      throw new Error('No route found in ORS response');
+    }
+    
     const route = data.features[0];
     const coordinates = route.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
     
-    return {
+    const result = {
       coordinates,
       distance: route.properties.segments[0].distance / 1000, // Convert to km
       duration: route.properties.segments[0].duration, // Already in seconds
     };
+    
+    console.log('✅ ORS Route calculated:', {
+      distance: `${result.distance.toFixed(2)}km`,
+      duration: this.formatDuration(result.duration),
+      coordinatesCount: coordinates.length
+    });
+    
+    return result;
   }
 
   /**
@@ -133,13 +157,32 @@ class RoutingService {
   }
 
   /**
-   * Estimate travel duration based on distance (assuming average city driving)
+   * Estimate travel duration based on distance (realistic city driving)
    */
   private static estimateDurationFromDistance(distance: number): number {
-    // Assuming average speed of 30 km/h in city traffic
-    const avgSpeedKmh = 30;
+    // More realistic city driving speeds
+    let avgSpeedKmh: number;
+    
+    if (distance < 2) {
+      // Short distances: lots of stops, traffic lights, pedestrians
+      avgSpeedKmh = 15; // 15 km/h for short city trips
+    } else if (distance < 10) {
+      // Medium distances: mixed city traffic
+      avgSpeedKmh = 25; // 25 km/h for medium city trips
+    } else {
+      // Longer distances: some highway/main roads
+      avgSpeedKmh = 35; // 35 km/h for longer trips
+    }
+    
     const durationHours = distance / avgSpeedKmh;
-    return Math.round(durationHours * 3600); // Convert to seconds
+    const totalMinutes = Math.round(durationHours * 60);
+    
+    // Ensure minimum realistic time - at least 2 minutes per km in heavy traffic
+    const finalMinutes = Math.max(totalMinutes, Math.round(distance * 2));
+    
+    console.log(`🕐 Fallback duration: ${distance.toFixed(1)}km at ${avgSpeedKmh}km/h = ${finalMinutes} minutes`);
+    
+    return finalMinutes * 60; // Convert to seconds
   }
 
   /**

@@ -46,5 +46,5 @@ export interface Ride {
 export interface RideRequest {
   pickupLocation: Location;
   destination: Location;
-  estimatedFare: number;
+  estimatedFare?: number;
 }

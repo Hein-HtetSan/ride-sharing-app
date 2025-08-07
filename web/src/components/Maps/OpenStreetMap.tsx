@@ -9,8 +9,11 @@ interface OpenStreetMapProps {
   markers?: Location[];
   onLocationSelect?: (location: Location) => void;
   showDirections?: boolean;
+  pickup?: Location;
   destination?: Location;
   routingService?: 'osrm' | 'graphhopper' | 'mapbox';
+  driverAccepted?: boolean; // New prop to trigger pickup location animation
+  waitingForDriver?: boolean; // New prop to show radiating while waiting for driver
 }
 
 const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
@@ -20,8 +23,11 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   markers = [],
   onLocationSelect,
   showDirections = false,
+  pickup,
   destination,
-  routingService = 'osrm'
+  routingService = 'osrm',
+  driverAccepted = false,
+  waitingForDriver = false
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<unknown>(null);
@@ -94,13 +100,28 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         (mapInstance.current as any).on('click', async (e: { latlng: { lat: number; lng: number } }) => {
           const { lat, lng } = e.latlng;
           
+          console.log('🗺️ Map clicked at:', { lat: lat.toFixed(6), lng: lng.toFixed(6) });
+          
+          // Add temporary marker to show user where they clicked
+          const L = (window as any).L;
+          const tempMarker = L.marker([lat, lng], {
+            icon: L.divIcon({
+              html: '<div style="background: #3b82f6; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: pulse 1s infinite;"></div>',
+              className: 'temp-marker',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
+            })
+          }).addTo(mapInstance.current);
+          
           try {
+            console.log('🌐 Reverse geocoding clicked location...');
+            
             // Use reverse geocoding via Nominatim (OpenStreetMap's geocoding service)
             const response = await fetch(
               `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
               {
                 headers: {
-                  'User-Agent': 'RideSharingApp/1.0'
+                  'User-Agent': 'RideWithUs/1.0'
                 }
               }
             );
@@ -118,8 +139,10 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                 postalCode: data.address?.postcode
               };
               
+              console.log('✅ Map click geocoding success:', location.address);
               onLocationSelect(location);
             } else {
+              console.log('⚠️ No address found, using coordinates');
               onLocationSelect({
                 lat,
                 lng,
@@ -127,12 +150,17 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
               });
             }
           } catch (error) {
-            console.error('Reverse geocoding failed:', error);
+            console.error('❌ Map click geocoding failed:', error);
             onLocationSelect({
               lat,
               lng,
               address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
             });
+          } finally {
+            // Remove temporary marker after a short delay
+            setTimeout(() => {
+              (mapInstance.current as any).removeLayer(tempMarker);
+            }, 2000);
           }
         });
       }
@@ -161,7 +189,17 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
 
   // Handle markers
   useEffect(() => {
-    if (!mapInstance.current || !window.L) return;
+    console.log('🔄 MARKER EFFECT TRIGGERED:', {
+      mapInstanceExists: !!mapInstance.current,
+      leafletExists: !!window.L,
+      markersLength: markers.length,
+      markersData: markers.map(m => ({ lat: m.lat, lng: m.lng, address: m.address?.substring(0, 50) + '...' }))
+    });
+    
+    if (!mapInstance.current || !window.L) {
+      console.warn('⚠️ Cannot add markers - map not ready');
+      return;
+    }
 
     const L = (window as any).L;
     
@@ -177,32 +215,126 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
 
     // Add new markers
     markers.forEach((markerLocation, index) => {
-      const isOrigin = index === 0;
+      // Determine marker type based on location comparison
+      const isCurrentLocation = index === 0; // First marker is always current location
+      const isPickupLocation = pickup && markerLocation.lat === pickup.lat && markerLocation.lng === pickup.lng;
+      const isDestinationLocation = destination && markerLocation.lat === destination.lat && markerLocation.lng === destination.lng;
       
-      // Create custom marker icon
+      let markerType, markerColor, markerEmoji, markerTitle;
+      
+      if (isCurrentLocation && !isPickupLocation) {
+        markerType = 'CURRENT';
+        markerColor = '#22c55e'; // Green
+        markerEmoji = '📍';
+        markerTitle = 'Current Location';
+      } else if (isPickupLocation) {
+        markerType = 'PICKUP';
+        markerColor = '#3b82f6'; // Blue
+        markerEmoji = '🚗';
+        markerTitle = 'Pickup Location';
+      } else if (isDestinationLocation) {
+        markerType = 'DESTINATION';
+        markerColor = '#ef4444'; // Red
+        markerEmoji = '🎯';
+        markerTitle = 'Destination';
+      } else {
+        markerType = 'OTHER';
+        markerColor = '#6b7280'; // Gray
+        markerEmoji = '📌';
+        markerTitle = 'Location';
+      }
+      
+      console.log(`🏷️ Adding ${markerType} marker:`, {
+        location: markerLocation,
+        coordinates: `${markerLocation.lat}, ${markerLocation.lng}`,
+        address: markerLocation.address,
+        title: markerTitle
+      });
+      
+      // Create custom marker icon with radiating animation
       const markerIcon = L.divIcon({
-        html: `<div style="
-          background-color: ${isOrigin ? '#22c55e' : '#ef4444'};
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        "></div>`,
-        className: '',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
+        html: `
+          <div class="marker-container">
+            <div class="marker-pulse" style="
+              position: absolute;
+              width: 60px;
+              height: 60px;
+              border-radius: 50%;
+              background-color: ${markerColor}40;
+              top: -14px;
+              left: -14px;
+              animation: pulse-ring 2s infinite ease-out;
+              z-index: 1;
+            "></div>
+            ${isPickupLocation && (waitingForDriver || driverAccepted) ? `
+            <div class="driver-acceptance-ring" style="
+              position: absolute;
+              width: 120px;
+              height: 120px;
+              border-radius: 50%;
+              background-color: ${markerColor}20;
+              top: -44px;
+              left: -44px;
+              animation: driver-acceptance-pulse 1.5s infinite ease-out;
+              z-index: 0;
+            "></div>
+            <div class="driver-acceptance-ring-2" style="
+              position: absolute;
+              width: 160px;
+              height: 160px;
+              border-radius: 50%;
+              background-color: ${markerColor}15;
+              top: -64px;
+              left: -64px;
+              animation: driver-acceptance-pulse 1.5s infinite ease-out 0.5s;
+              z-index: 0;
+            "></div>
+            ` : ''}
+            <div style="
+              background-color: ${markerColor};
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
+              border: 4px solid white;
+              box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 16px;
+              font-weight: bold;
+              color: white;
+              z-index: 2;
+              position: relative;
+            ">${markerEmoji}</div>
+          </div>
+        `,
+        className: 'custom-marker-animated',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
       });
 
       const marker = L.marker([markerLocation.lat, markerLocation.lng], {
         icon: markerIcon
       }).addTo(mapInstance.current);
 
-      // Add popup
+      // Add popup with better styling
       const popupContent = `
-        <div style="padding: 8px; min-width: 200px;">
-          <strong>${markerLocation.address}</strong>
-          ${markerLocation.city ? `<br><small>City: ${markerLocation.city}</small>` : ''}
+        <div style="padding: 12px; min-width: 250px; max-width: 300px;">
+          <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 16px; margin-right: 8px;">${markerEmoji}</span>
+            <strong style="color: ${markerColor};">
+              ${markerTitle}
+            </strong>
+          </div>
+          <div style="color: #374151; font-size: 14px; line-height: 1.4;">
+            ${markerLocation.address}
+          </div>
+          ${markerLocation.city ? `<div style="color: #6b7280; font-size: 12px; margin-top: 4px;">
+            📍 ${markerLocation.city}
+          </div>` : ''}
+          <div style="color: #9ca3af; font-size: 11px; margin-top: 6px; font-family: monospace;">
+            ${markerLocation.lat.toFixed(6)}, ${markerLocation.lng.toFixed(6)}
+          </div>
         </div>
       `;
       
@@ -210,11 +342,13 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
 
       markersRef.current.push(marker);
     });
-  }, [markers]);
+    
+    console.log(`✅ Added ${markers.length} markers to map`);
+  }, [markers, center, pickup, destination, driverAccepted, waitingForDriver]);
 
   // Handle directions
   useEffect(() => {
-    if (!mapInstance.current || !showDirections || !destination || markers.length === 0) {
+    if (!mapInstance.current || !showDirections || !destination) {
       if (routeLayer.current) {
         (mapInstance.current as any).removeLayer(routeLayer.current);
         routeLayer.current = null;
@@ -225,7 +359,10 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     const drawRoute = async () => {
       try {
         const L = (window as any).L;
-        const start = markers[0];
+        // Use pickup location if provided, otherwise use first marker or center
+        const start = pickup || (markers.length > 0 ? markers[0] : center);
+        console.log('🗺️ Drawing route from:', start, 'to:', destination);
+        
         const routeResult = await RoutingService.getRoute(start, destination);
         
         if (routeResult && routeResult.coordinates.length > 0) {
@@ -256,7 +393,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     };
 
     drawRoute();
-  }, [showDirections, destination, markers, routingService]);
+  }, [showDirections, destination, pickup, markers, routingService, center]);
 
   // Error state
   if (error) {
@@ -313,6 +450,37 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       style={{ height, width: '100%', borderRadius: '8px', overflow: 'hidden' }}
       className="relative"
     >
+      <style>{`
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pulse-ring {
+          0% {
+            transform: scale(0.1);
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.3;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 0;
+          }
+        }
+        .temp-marker {
+          animation: pulse 1s infinite;
+        }
+        .marker-container {
+          position: relative;
+          width: 32px;
+          height: 32px;
+        }
+        .custom-marker-animated .marker-pulse {
+          animation: pulse-ring 2s infinite ease-out;
+        }
+      `}</style>
       <div 
         ref={mapRef} 
         style={{ 
@@ -320,9 +488,11 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           height: '100%',
           minHeight: '300px',
           position: 'relative',
-          zIndex: 1
+          zIndex: 1,
+          cursor: 'crosshair'
         }}
         className="leaflet-map-wrapper"
+        title="Click anywhere to set destination"
       />
     </div>
   );
