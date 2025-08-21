@@ -86,6 +86,11 @@ jobs:
           # Ensure user is in docker group
           sudo usermod -aG docker $USER
           
+          # Install curl if not available (needed for health checks)
+          if ! command -v curl &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y curl
+          fi
+          
           # Create application directory if it doesn't exist
           sudo mkdir -p /opt/ride-sharing-app
           sudo chown $USER:$USER /opt/ride-sharing-app
@@ -109,5 +114,40 @@ jobs:
           # Start with new images
           sudo docker compose -f docker-compose.prod.yml up -d
           
+          # Wait a bit for containers to start
+          echo "⏳ Waiting for containers to initialize..."
+          sleep 20
+          
+          # Make the check script executable and run service checks
+          chmod +x scripts/check-services-prod.sh
+          echo "🔍 Running service health checks..."
+          if ./scripts/check-services-prod.sh; then
+            echo "✅ All services are healthy!"
+          else
+            echo "❌ Some services failed health checks. Checking container status..."
+            sudo docker compose -f docker-compose.prod.yml ps
+            echo "📋 Recent logs:"
+            sudo docker compose -f docker-compose.prod.yml logs --tail=20
+            exit 1
+          fi
+          
           # Clean up unused images
           sudo docker image prune -f
+          
+          echo "🚀 Deployment completed successfully!"
+
+    - name: Create deployment summary
+      if: always()
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Deployment Status:** ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Server:** ${{ secrets.SERVER_HOST }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🌐 Application URLs" >> $GITHUB_STEP_SUMMARY
+        echo "- **Web UI:** http://${{ secrets.SERVER_HOST }}:3000" >> $GITHUB_STEP_SUMMARY
+        echo "- **API:** http://${{ secrets.SERVER_HOST }}:8080" >> $GITHUB_STEP_SUMMARY
+        echo "- **RMI Server:** ${{ secrets.SERVER_HOST }}:1099" >> $GITHUB_STEP_SUMMARY
+        echo "- **Swagger UI:** http://${{ secrets.SERVER_HOST }}:8080/swagger-ui.html" >> $GITHUB_STEP_SUMMARY
