@@ -76,23 +76,35 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Deploy to server
-      uses: appleboy/ssh-action@v1.0.0
+      uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
         script: |
+          # Create application directory if it doesn't exist
+          sudo mkdir -p /opt/ride-sharing-app
+          sudo chown $USER:$USER /opt/ride-sharing-app
+          
           # Navigate to application directory
-          cd /opt/ride-sharing-app || exit 1
+          cd /opt/ride-sharing-app
+          
+          # Clone or update repository (needed for docker-compose.prod.yml)
+          if [ ! -d ".git" ]; then
+            git clone https://github.com/Hein-HtetSan/ride-sharing-app.git .
+          else
+            git pull origin main
+          fi
           
           # Pull latest images
-          docker compose pull
+          docker compose -f docker-compose.prod.yml pull
           
           # Stop and remove existing containers
-          docker compose down
+          docker compose -f docker-compose.prod.yml down
           
           # Start with new images
-          docker compose up -d
+          docker compose -f docker-compose.prod.yml up -d
           
           # Clean up unused images
           docker image prune -f
