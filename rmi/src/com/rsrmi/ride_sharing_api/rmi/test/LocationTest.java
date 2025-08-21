@@ -19,12 +19,12 @@ public class LocationTest {
         
         // Test 2: Constructor with parameters
         UserLocation location2 = new UserLocation(
-            2, 
-            34.0522, 
-            -118.2437, 
-            "Los Angeles, CA", 
-            true, 
-            "2025-08-06T12:00:00"
+            2,
+            34.0522,
+            -118.2437,
+            "Los Angeles, CA",
+            true,
+            java.time.LocalDateTime.of(2025, 8, 6, 12, 0, 0)
         );
         System.out.println("Location 2 (using constructor): " + location2);
         

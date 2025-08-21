@@ -1,7 +1,7 @@
 package com.rsrmi.ride_sharing_api.rmi.models;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.io.Serializable;
 
 public class UserLocation implements Serializable {
     private static final long serialVersionUID = 1L;

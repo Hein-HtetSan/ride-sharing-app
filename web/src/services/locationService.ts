@@ -10,32 +10,14 @@ export class LocationService {
         return;
       }
 
-      console.log('LocationService: Requesting FRESH geolocation with high accuracy...');
-      console.log('LocationService: Geolocation options:', {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      });
       
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          console.log('LocationService: Raw geolocation success:', {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp,
-            timestampFormatted: new Date(position.timestamp).toLocaleString(),
-            heading: position.coords.heading,
-            speed: position.coords.speed,
-            altitudeAccuracy: position.coords.altitudeAccuracy
-          });
           
           // Check if this is a stale/cached reading
           const locationAge = Date.now() - position.timestamp;
-          console.log(`LocationService: GPS reading age: ${locationAge}ms (${Math.round(locationAge/1000)}s)`);
           
           if (locationAge > 60000) { // More than 1 minute old
-            console.warn('LocationService: GPS reading is older than 1 minute - this might be cached data!');
           }
           
           const { latitude: lat, longitude: lng } = position.coords;
@@ -49,12 +31,9 @@ export class LocationService {
           
           // Try to get address from reverse geocoding
           try {
-            console.log(`LocationService: Attempting reverse geocoding for ${lat}, ${lng}`);
             const location = await this.reverseGeocode(lat, lng);
-            console.log('LocationService: Reverse geocoding success:', location);
             resolve(location);
           } catch (error) {
-            console.warn('LocationService: Reverse geocoding failed, using coordinates only:', error);
             // Fallback to coordinates only
             const coordLocation = {
               lat,
@@ -65,30 +44,19 @@ export class LocationService {
               country: 'Unknown',
               postalCode: undefined
             };
-            console.log('LocationService: Resolving with coordinate-only location:', coordLocation);
             resolve(coordLocation);
           }
         },
         (error) => {
-          console.warn('LocationService: Geolocation failed:', {
-            code: error.code,
-            message: error.message,
-            PERMISSION_DENIED: error.code === 1,
-            POSITION_UNAVAILABLE: error.code === 2,
-            TIMEOUT: error.code === 3
-          });
           
           let errorMessage = 'Unknown geolocation error';
           
           if (error.code === 1) {
             errorMessage = 'Location permission denied. Please enable location access in your browser.';
-            console.log('LocationService: Permission denied - please allow location access in browser settings');
           } else if (error.code === 2) {
             errorMessage = 'Location unavailable. Please check your GPS/internet connection.';
-            console.log('LocationService: Position unavailable - check GPS/internet connection');
           } else if (error.code === 3) {
             errorMessage = 'Location request timeout. Please try again.';
-            console.log('LocationService: Location request timeout');
           }
           
           console.error('LocationService: Unable to get location');
@@ -131,7 +99,6 @@ export class LocationService {
         }
       }
       
-      console.warn('Nominatim reverse geocoding failed');
       
       // Fallback to coordinates
       return {
@@ -244,7 +211,6 @@ export class LocationService {
     // Ensure minimum realistic time
     const finalMinutes = Math.max(totalMinutes, Math.round(distanceKm * 2)); // At least 2 minutes per km in heavy traffic
     
-    console.log(`🕐 Duration calculation: ${distanceKm.toFixed(1)}km at ${avgSpeedKmh}km/h = ${finalMinutes} minutes`);
     
     if (finalMinutes < 60) {
       return `${finalMinutes} min${finalMinutes > 1 ? 's' : ''}`;

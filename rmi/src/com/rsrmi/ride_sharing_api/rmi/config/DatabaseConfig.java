@@ -64,6 +64,11 @@ public class DatabaseConfig {
              Statement stmt = conn.createStatement()) {
             
             System.out.println("Initializing database tables...");
+
+            // drop all the table
+            stmt.executeUpdate("DROP TABLE IF EXISTS rides CASCADE");
+            stmt.executeUpdate("DROP TABLE IF EXISTS user_locations CASCADE");
+            stmt.executeUpdate("DROP TABLE IF EXISTS users CASCADE");
             
             // Create users table
             stmt.executeUpdate("""
@@ -84,9 +89,10 @@ public class DatabaseConfig {
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS user_locations (
                     id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
                     latitude DOUBLE PRECISION NOT NULL,
                     longitude DOUBLE PRECISION NOT NULL,
+                    address VARCHAR(255),
                     is_online BOOLEAN DEFAULT true,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -96,15 +102,31 @@ public class DatabaseConfig {
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS rides (
                     id SERIAL PRIMARY KEY,
-                    rider_id INTEGER REFERENCES users(id),
-                    driver_id INTEGER REFERENCES users(id),
+                    rider_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    driver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                     pickup_latitude DOUBLE PRECISION NOT NULL,
                     pickup_longitude DOUBLE PRECISION NOT NULL,
+                    pickup_address VARCHAR(500),
                     destination_latitude DOUBLE PRECISION,
                     destination_longitude DOUBLE PRECISION,
-                    status VARCHAR(20) DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+                    destination_address VARCHAR(500),
+                    status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    accepted_at TIMESTAMP,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP
+                )
+            """);
+            
+            // Create ride_tracking table for real-time driver location during rides
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS ride_tracking (
+                    id SERIAL PRIMARY KEY,
+                    ride_id INTEGER REFERENCES rides(id) ON DELETE CASCADE,
+                    driver_latitude DOUBLE PRECISION NOT NULL,
+                    driver_longitude DOUBLE PRECISION NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """);
             
@@ -115,8 +137,19 @@ public class DatabaseConfig {
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_rides_rider_id ON rides(rider_id)");
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_rides_driver_id ON rides(driver_id)");
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status)");
+            stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_ride_tracking_ride_id ON ride_tracking(ride_id)");
+            stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_ride_tracking_timestamp ON ride_tracking(timestamp)");
             
             System.out.println("Database tables initialized successfully!");
+
+            // create rider and driver
+            stmt.executeUpdate("""
+                INSERT INTO users (username, phone, password, user_type, car_type, license_number)
+                VALUES 
+                    ('rider', '09761349721', 'rider', 'RIDER', NULL, NULL),
+                    ('driver', '0900112233', 'driver', 'DRIVER', 'Sedan', 'LIC12345')
+                ON CONFLICT (username) DO NOTHING
+            """);
             
         } catch (SQLException e) {
             System.err.println("Error initializing database: " + e.getMessage());

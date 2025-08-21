@@ -1,15 +1,28 @@
-package com.rsrmi.ride_sharing_api.rmi.models;
+package com.rsrmi.api.model;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class UserLocation implements Serializable {
     private static final long serialVersionUID = 1L;
+    
+    @JsonProperty("user_id")
     private int user_id;
+    
+    @JsonProperty("latitude")
     private double latitude;
+    
+    @JsonProperty("longitude")
     private double longitude;
+    
+    @JsonProperty("address")
     private String address;
+    
+    @JsonProperty("is_online")
     private boolean is_online;
+    
+    @JsonProperty("last_updated")
     private LocalDateTime last_updated;
 
     public UserLocation() {
@@ -110,3 +123,4 @@ public class UserLocation implements Serializable {
         return EARTH_RADIUS * c; // Distance in kilometers
     }
 }
+

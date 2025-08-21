@@ -148,19 +148,16 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userType }) => {
                   <label htmlFor="vehicleType" className="block text-sm font-medium text-gray-700">
                     Vehicle Type
                   </label>
-                  <select
+                  <input
                     id="vehicleType"
                     name="vehicleType"
+                    type="text"
                     required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter vehicle type (e.g., Car, Motorcycle, SUV)"
                     value={formData.vehicleType}
                     onChange={handleChange}
-                  >
-                    <option value="">Select vehicle type</option>
-                    <option value="car">Car</option>
-                    <option value="motorcycle">Motorcycle</option>
-                    <option value="suv">SUV</option>
-                  </select>
+                  />
                 </div>
 
                 <div>

@@ -72,7 +72,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       return;
     }
 
-    console.log('🔍 LocationSearch: Searching for:', searchQuery);
     setIsLoading(true);
 
     try {
@@ -88,7 +87,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 LocationSearch: Raw API response:', data);
         
         const locations: Location[] = data.map((place: {
           lat: string;
@@ -112,7 +110,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
           postalCode: place.address?.postcode
         }));
         
-        console.log('🔍 LocationSearch: Processed locations:', locations);
         setSuggestions(locations);
       } else {
         console.error('Nominatim API response error:', response.status);
@@ -147,12 +144,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
 
   // Handle location selection
   const handleLocationSelect = (location: Location) => {
-    console.log('🔍 LocationSearch: Location selected:', location);
-    console.log('🔍 LocationSearch: Calling onLocationSelect with:', {
-      lat: location.lat,
-      lng: location.lng,
-      address: location.address
-    });
     
     setQuery(location.address);
     onChange?.(location.address); // Call external onChange if provided
@@ -163,7 +154,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
 
   // Clear search
   const clearSearch = () => {
-    console.log('🔍 LocationSearch: Clearing search');
     setQuery('');
     onChange?.(''); // Call external onChange if provided
     setSuggestions([]);
@@ -190,7 +180,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         return;
       }
       
-      console.log('🔍 LocationSearch: Closing suggestions due to outside click');
       setShowSuggestions(false);
     };
 

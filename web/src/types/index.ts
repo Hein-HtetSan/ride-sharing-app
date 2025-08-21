@@ -29,22 +29,38 @@ export interface Location {
   city?: string;
   country?: string;
   postalCode?: string;
+  isRiderWaiting?: boolean; // Add flag for waiting riders
 }
 
 export interface Ride {
-  id: string;
-  riderId: string;
-  driverId?: string;
-  pickupLocation: Location;
-  destination: Location;
-  status: 'pending' | 'accepted' | 'picking_up' | 'in_progress' | 'completed' | 'cancelled';
-  fare?: number;
-  estimatedTime?: number;
-  createdAt: Date;
+  id: number;
+  riderId: number;
+  driverId: number;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  destinationLatitude: number;
+  destinationLongitude: number;
+  pickupAddress?: string;
+  destinationAddress?: string;
+  riderUsername?: string;
+  riderPhone?: string;
+  status: 'PENDING' | 'ACCEPTED' | 'DRIVER_EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  createdAt: string;
+  updatedAt: string;
+  acceptedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export interface RideRequest {
   pickupLocation: Location;
   destination: Location;
   estimatedFare?: number;
+}
+
+export interface RideRequestResponse {
+  success: boolean;
+  message: string;
+  status: string;
+  data: number; // This is the ride ID
 }

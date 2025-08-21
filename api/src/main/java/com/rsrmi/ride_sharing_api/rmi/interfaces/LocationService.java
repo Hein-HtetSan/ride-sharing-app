@@ -6,15 +6,11 @@ import java.util.List;
 import com.rsrmi.ride_sharing_api.rmi.models.UserLocation;
 import java.time.LocalDateTime;
 
-/**
- * Remote interface for location-related services in the ride-sharing system.
- */
 public interface LocationService extends Remote {
-
-    boolean updateUserLocation(int userId, UserLocation location) throws RemoteException;
+    
+    boolean updateUserLocation(int urserId, UserLocation location) throws RemoteException;
 
     UserLocation getUserLocation(int userId) throws RemoteException;
 
     List<UserLocation> findNearbyDrivers(UserLocation riderLocation, double radiusKm) throws RemoteException;
-    
 }

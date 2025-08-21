@@ -14,6 +14,8 @@ interface OpenStreetMapProps {
   routingService?: 'osrm' | 'graphhopper' | 'mapbox';
   driverAccepted?: boolean; // New prop to trigger pickup location animation
   waitingForDriver?: boolean; // New prop to show radiating while waiting for driver
+  driverLocation?: Location; // Driver's real-time location
+  driverInfo?: { id: number; username: string; phone: string }; // Driver information
 }
 
 const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
@@ -27,7 +29,9 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   destination,
   routingService = 'osrm',
   driverAccepted = false,
-  waitingForDriver = false
+  waitingForDriver = false,
+  driverLocation,
+  driverInfo
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<unknown>(null);
@@ -65,7 +69,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         }
 
         setIsLoaded(true);
-        console.log('✅ OpenStreetMap (Leaflet) loaded successfully');
       } catch (error) {
         console.error('❌ Failed to load OpenStreetMap:', error);
         setError('Failed to load OpenStreetMap. Please check your internet connection.');
@@ -100,7 +103,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         (mapInstance.current as any).on('click', async (e: { latlng: { lat: number; lng: number } }) => {
           const { lat, lng } = e.latlng;
           
-          console.log('🗺️ Map clicked at:', { lat: lat.toFixed(6), lng: lng.toFixed(6) });
           
           // Add temporary marker to show user where they clicked
           const L = (window as any).L;
@@ -114,7 +116,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           }).addTo(mapInstance.current);
           
           try {
-            console.log('🌐 Reverse geocoding clicked location...');
             
             // Use reverse geocoding via Nominatim (OpenStreetMap's geocoding service)
             const response = await fetch(
@@ -139,10 +140,8 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                 postalCode: data.address?.postcode
               };
               
-              console.log('✅ Map click geocoding success:', location.address);
               onLocationSelect(location);
             } else {
-              console.log('⚠️ No address found, using coordinates');
               onLocationSelect({
                 lat,
                 lng,
@@ -165,7 +164,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         });
       }
 
-      console.log('🗺️ OpenStreetMap initialized successfully');
     } catch (error) {
       console.error('Failed to initialize OpenStreetMap:', error);
       setError('Failed to initialize map. Please refresh the page.');
@@ -174,55 +172,49 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
 
   // Update map center when center prop changes
   useEffect(() => {
-    console.log('🗺️ OpenStreetMap: Center prop changed to:', {
-      lat: center.lat,
-      lng: center.lng,
-      address: center.address,
-      city: center.city
-    });
     
     if (mapInstance.current) {
-      console.log('🗺️ OpenStreetMap: Moving map to new center:', center.lat, center.lng);
       (mapInstance.current as any).setView([center.lat, center.lng], zoom);
     }
   }, [center, zoom]);
 
   // Handle markers
   useEffect(() => {
-    console.log('🔄 MARKER EFFECT TRIGGERED:', {
-      mapInstanceExists: !!mapInstance.current,
-      leafletExists: !!window.L,
-      markersLength: markers.length,
-      markersData: markers.map(m => ({ lat: m.lat, lng: m.lng, address: m.address?.substring(0, 50) + '...' }))
-    });
     
     if (!mapInstance.current || !window.L) {
-      console.warn('⚠️ Cannot add markers - map not ready');
       return;
     }
 
     const L = (window as any).L;
     
-    console.log('🗺️ OpenStreetMap: Updating markers with data:', {
-      center: center,
-      markersCount: markers.length,
-      markersData: markers
-    });
 
     // Clear existing markers
     markersRef.current.forEach(marker => (mapInstance.current as any).removeLayer(marker));
     markersRef.current = [];
 
+    // Create combined markers array including driver location
+    const allMarkers = [
+      ...markers,
+      ...(driverLocation ? [{ ...driverLocation, isDriverLocation: true }] : [])
+    ];
+
     // Add new markers
-    markers.forEach((markerLocation, index) => {
+    allMarkers.forEach((markerLocation, index) => {
       // Determine marker type based on location comparison
-      const isCurrentLocation = index === 0; // First marker is always current location
+      const isCurrentLocation = index === 0 && !driverLocation; // First marker is current location only if no driver location
       const isPickupLocation = pickup && markerLocation.lat === pickup.lat && markerLocation.lng === pickup.lng;
       const isDestinationLocation = destination && markerLocation.lat === destination.lat && markerLocation.lng === destination.lng;
+      const isRiderWaiting = markerLocation.isRiderWaiting || false; // Check if this is a waiting rider
+      const isDriverLocation = (markerLocation as any).isDriverLocation || false; // Check if this is driver location
       
       let markerType, markerColor, markerEmoji, markerTitle;
       
-      if (isCurrentLocation && !isPickupLocation) {
+      if (isDriverLocation) {
+        markerType = 'DRIVER';
+        markerColor = '#f59e0b'; // Amber/Orange
+        markerEmoji = '🚖';
+        markerTitle = driverInfo ? `Driver: ${driverInfo.username}` : 'Your Driver';
+      } else if (isCurrentLocation && !isPickupLocation) {
         markerType = 'CURRENT';
         markerColor = '#22c55e'; // Green
         markerEmoji = '📍';
@@ -237,6 +229,11 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         markerColor = '#ef4444'; // Red
         markerEmoji = '🎯';
         markerTitle = 'Destination';
+      } else if (isRiderWaiting) {
+        markerType = 'RIDER_WAITING';
+        markerColor = '#f59e0b'; // Orange/yellow for waiting riders
+        markerEmoji = '🙋‍♂️';
+        markerTitle = 'Rider Waiting';
       } else {
         markerType = 'OTHER';
         markerColor = '#6b7280'; // Gray
@@ -244,12 +241,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         markerTitle = 'Location';
       }
       
-      console.log(`🏷️ Adding ${markerType} marker:`, {
-        location: markerLocation,
-        coordinates: `${markerLocation.lat}, ${markerLocation.lng}`,
-        address: markerLocation.address,
-        title: markerTitle
-      });
       
       // Create custom marker icon with radiating animation
       const markerIcon = L.divIcon({
@@ -266,27 +257,38 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
               animation: pulse-ring 2s infinite ease-out;
               z-index: 1;
             "></div>
-            ${isPickupLocation && (waitingForDriver || driverAccepted) ? `
-            <div class="driver-acceptance-ring" style="
+            ${(isPickupLocation && (waitingForDriver || driverAccepted)) || isRiderWaiting ? `
+            <div class="rider-waiting-ring" style="
               position: absolute;
-              width: 120px;
-              height: 120px;
+              width: 100px;
+              height: 100px;
               border-radius: 50%;
-              background-color: ${markerColor}20;
-              top: -44px;
-              left: -44px;
-              animation: driver-acceptance-pulse 1.5s infinite ease-out;
+              background-color: ${markerColor}25;
+              top: -34px;
+              left: -34px;
+              animation: rider-waiting-pulse 2s infinite ease-out;
               z-index: 0;
             "></div>
-            <div class="driver-acceptance-ring-2" style="
+            <div class="rider-waiting-ring-2" style="
               position: absolute;
-              width: 160px;
-              height: 160px;
+              width: 140px;
+              height: 140px;
               border-radius: 50%;
               background-color: ${markerColor}15;
-              top: -64px;
-              left: -64px;
-              animation: driver-acceptance-pulse 1.5s infinite ease-out 0.5s;
+              top: -54px;
+              left: -54px;
+              animation: rider-waiting-pulse 2s infinite ease-out 0.7s;
+              z-index: 0;
+            "></div>
+            <div class="rider-waiting-ring-3" style="
+              position: absolute;
+              width: 180px;
+              height: 180px;
+              border-radius: 50%;
+              background-color: ${markerColor}10;
+              top: -74px;
+              left: -74px;
+              animation: rider-waiting-pulse 2s infinite ease-out 1.4s;
               z-index: 0;
             "></div>
             ` : ''}
@@ -343,8 +345,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       markersRef.current.push(marker);
     });
     
-    console.log(`✅ Added ${markers.length} markers to map`);
-  }, [markers, center, pickup, destination, driverAccepted, waitingForDriver]);
+  }, [markers, center, pickup, destination, driverAccepted, waitingForDriver, driverLocation, driverInfo]);
 
   // Handle directions
   useEffect(() => {
@@ -361,7 +362,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         const L = (window as any).L;
         // Use pickup location if provided, otherwise use first marker or center
         const start = pickup || (markers.length > 0 ? markers[0] : center);
-        console.log('🗺️ Drawing route from:', start, 'to:', destination);
         
         const routeResult = await RoutingService.getRoute(start, destination);
         
@@ -385,7 +385,6 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           ]);
           (mapInstance.current as any).fitBounds(group.getBounds().pad(0.1));
 
-          console.log(`✅ Route calculated using ${routingService}: ${RoutingService.formatDuration(routeResult.duration)}, ${routeResult.distance.toFixed(1)}km`);
         }
       } catch (error) {
         console.error('Failed to calculate route:', error);
@@ -463,6 +462,19 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           }
           50% {
             opacity: 0.3;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 0;
+          }
+        }
+        @keyframes rider-waiting-pulse {
+          0% {
+            transform: scale(0.2);
+            opacity: 0.8;
+          }
+          50% {
+            opacity: 0.4;
           }
           100% {
             transform: scale(1);

@@ -114,6 +114,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
             
             int rows = stmt.executeUpdate();
             if (rows > 0) {
+                System.out.println("✅ User updated successfully : " + user.getUsername());
                 return getUserById(id);
             } else {
                 return null;
@@ -131,7 +132,12 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
             PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, id);
                 int rows = stmt.executeUpdate();
-                return rows > 0;
+                if (rows > 0) {
+                    System.out.println("✅ User deleted successfully ");
+                    return true;
+                } else {
+                    return false;
+                }
         } catch (SQLException e) {
             System.err.println("Delete failed: " + e.getMessage());
             return false;

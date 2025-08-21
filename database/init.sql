@@ -14,9 +14,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS user_locations (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     latitude DOUBLE PRECISION NOT NULL,
     longitude DOUBLE PRECISION NOT NULL,
+    address VARCHAR(255),
     is_online BOOLEAN DEFAULT true,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -27,11 +28,24 @@ CREATE TABLE IF NOT EXISTS rides (
     driver_id INTEGER REFERENCES users(id),
     pickup_latitude DOUBLE PRECISION NOT NULL,
     pickup_longitude DOUBLE PRECISION NOT NULL,
+    pickup_address VARCHAR(500),
     destination_latitude DOUBLE PRECISION,
     destination_longitude DOUBLE PRECISION,
-    status VARCHAR(20) DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+    destination_address VARCHAR(500),
+    status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    accepted_at TIMESTAMP,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ride_tracking (
+    id SERIAL PRIMARY KEY,
+    ride_id INTEGER REFERENCES rides(id) ON DELETE CASCADE,
+    driver_latitude DOUBLE PRECISION NOT NULL,
+    driver_longitude DOUBLE PRECISION NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
@@ -40,3 +54,5 @@ CREATE INDEX IF NOT EXISTS idx_user_locations_user_id ON user_locations(user_id)
 CREATE INDEX IF NOT EXISTS idx_rides_rider_id ON rides(rider_id);
 CREATE INDEX IF NOT EXISTS idx_rides_driver_id ON rides(driver_id);
 CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status);
+CREATE INDEX IF NOT EXISTS idx_ride_tracking_ride_id ON ride_tracking(ride_id);
+CREATE INDEX IF NOT EXISTS idx_ride_tracking_timestamp ON ride_tracking(timestamp);

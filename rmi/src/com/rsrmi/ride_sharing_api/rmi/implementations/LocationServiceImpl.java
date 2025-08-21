@@ -12,6 +12,8 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.ArrayList;
 import com.rsrmi.ride_sharing_api.rmi.config.DatabaseConfig;
+import java.time.LocalDateTime;
+import java.sql.Timestamp;
 
 public class LocationServiceImpl extends UnicastRemoteObject implements LocationService {
     private final DatabaseConfig dbConfig;
@@ -23,20 +25,25 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
 
     // Update a user's location, timestamp, and availability
     @Override
-    public boolean updateUserLocation(int userId, UserLocation location, long timestamp, boolean isAvailable) throws RemoteException {
+    public boolean updateUserLocation(int userId, UserLocation location) throws RemoteException {
         String sql = "INSERT INTO user_locations (user_id, latitude, longitude, address, last_updated, is_online) " +
                 "VALUES (?, ?, ?, ?, ?, ?) " +
-                "ON CONFLICT (user_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, address = EXCLUDED.address, last_updated = EXCLUDED.last_updated, is_available = EXCLUDED.is_available";
+                "ON CONFLICT (user_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, address = EXCLUDED.address, last_updated = EXCLUDED.last_updated, is_online = EXCLUDED.is_online";
         try (Connection conn = dbConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, userId);
             stmt.setDouble(2, location.getLatitude());
             stmt.setDouble(3, location.getLongitude());
             stmt.setString(4, location.getAddress());
-            stmt.setLong(5, timestamp);
-            stmt.setBoolean(6, isAvailable);
+            stmt.setTimestamp(5, Timestamp.valueOf(location.getLastUpdated()));
+            stmt.setBoolean(6, location.getIsOnline());
             int affected = stmt.executeUpdate();
-            return affected > 0;
+            if (affected > 0) {
+                System.out.println("✅ User lcoation updated successfully for : " + location.getAddress());
+                return true;
+            } else {
+                return false;
+            }
         } catch (SQLException e) {
             System.err.println("updateUserLocation: SQL error: " + e.getMessage());
             return false;
@@ -56,8 +63,12 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
                     double lon = rs.getDouble("longitude");
                     String address = rs.getString("address");
                     boolean is_online = rs.getBoolean("is_online");
-                    String last_updated = rs.getString("last_updated");
-                    return new UserLocation(userId, lat, lon, address, is_online, last_updated);
+                    Timestamp lastUpdatedTs = rs.getTimestamp("last_updated");
+                    LocalDateTime lastUpdated = lastUpdatedTs != null ? lastUpdatedTs.toLocalDateTime() : null;
+
+                    System.out.println("✅ Get user location successfully for user id : " + userId);
+
+                    return new UserLocation(userId, lat, lon, address, is_online, lastUpdated);
                 }
             }
         } catch (SQLException e) {
@@ -88,7 +99,8 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
                     int userId = rs.getInt("user_id");
                     String address = rs.getString("address");
                     boolean isOnline = rs.getBoolean("is_online");
-                    String lastUpdated = rs.getString("last_updated");
+                    Timestamp lastUpdatedTs = rs.getTimestamp("last_updated");
+                    LocalDateTime lastUpdated = lastUpdatedTs != null ? lastUpdatedTs.toLocalDateTime() : null;
                     UserLocation driverLoc = new UserLocation(userId, lat, lon, address, isOnline, lastUpdated);
                     result.add(driverLoc);
                 }
@@ -96,6 +108,7 @@ public class LocationServiceImpl extends UnicastRemoteObject implements Location
         } catch (SQLException e) {
             System.err.println("findNearbyDrivers: SQL error: " + e.getMessage());
         }
+        System.out.println("✅ Get nearby drivers successfully for location : " + riderLocation.getAddress());
         return result;
     }
 

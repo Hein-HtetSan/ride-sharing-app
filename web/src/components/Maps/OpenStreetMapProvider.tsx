@@ -68,8 +68,6 @@ export const OpenStreetMapProvider: React.FC<OpenStreetMapProviderProps> = ({
         }
 
         setIsLoaded(true);
-        console.log('OpenStreetMap with Leaflet loaded successfully');
-        console.log(`Using routing service: ${routingService}`);
       } catch (error) {
         console.error('Failed to load OpenStreetMap:', error);
         setLoadError(true);

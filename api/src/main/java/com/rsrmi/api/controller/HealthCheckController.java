@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import reactor.core.publisher.Mono;
+import org.springframework.http.ResponseEntity;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -30,6 +31,11 @@ public class HealthCheckController {
         } catch (Exception e) {
             return Mono.just("RMI ERROR: " + e.getMessage());
         }
+    }
+    @GetMapping("/cors-test")
+    @Operation(summary = "CORS test endpoint", description = "Simple endpoint to test CORS headers")
+    public Mono<ResponseEntity<String>> corsTest() {
+        return Mono.just(ResponseEntity.ok("CORS is working!"));
     }
     
 }
