@@ -1,5 +1,4 @@
 # Production Docker Compose for Ride Sharing Application
-version: '3.8'
 
 services:
   # PostgreSQL Database

@@ -83,6 +83,9 @@ jobs:
         key: ${{ secrets.SERVER_SSH_KEY }}
         port: 22
         script: |
+          # Ensure user is in docker group
+          sudo usermod -aG docker $USER
+          
           # Create application directory if it doesn't exist
           sudo mkdir -p /opt/ride-sharing-app
           sudo chown $USER:$USER /opt/ride-sharing-app
@@ -97,14 +100,14 @@ jobs:
             git pull origin main
           fi
           
-          # Pull latest images
-          docker compose -f docker-compose.prod.yml pull
+          # Use sudo for docker commands if needed
+          sudo docker compose -f docker-compose.prod.yml pull
           
           # Stop and remove existing containers
-          docker compose -f docker-compose.prod.yml down
+          sudo docker compose -f docker-compose.prod.yml down
           
           # Start with new images
-          docker compose -f docker-compose.prod.yml up -d
+          sudo docker compose -f docker-compose.prod.yml up -d
           
           # Clean up unused images
-          docker image prune -f
+          sudo docker image prune -f
