@@ -3,8 +3,12 @@ FROM node:20 AS build
 
 WORKDIR /app
 
+# Accept build argument for API URL
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Install dependencies
-COPY package.json package-lock.json* .
+COPY package.json package-lock.json* ./
 RUN npm install
 
 # Copy source code

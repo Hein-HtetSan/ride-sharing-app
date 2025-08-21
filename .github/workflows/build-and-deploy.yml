@@ -65,6 +65,8 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        build-args: |
+          VITE_API_URL=${{ matrix.service == 'web' && format('http://{0}:8080', secrets.SERVER_HOST) || '' }}
 
   deploy:
     needs: build-and-push
