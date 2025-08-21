@@ -6,7 +6,6 @@ import { rideAPI, locationAPI, userAPI } from '../../services/api';
 import { Driver, Ride, RideRequest, Location } from '../../types';
 import { LocationService } from '../../services/locationService';
 import { RoutingService } from '../../services/routingService';
-import { sseService } from '../../services/sseService';
 import Header from '../Layout/Header';
 import { OpenStreetMap, LocationSearch } from '../Maps';
 
@@ -16,10 +15,8 @@ const RiderDashboard: React.FC = () => {
   const [pickup, setPickup] = useState('');
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
-  const [nearbyDrivers, setNearbyDrivers] = useState<Driver[]>([]);
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showRideForm, setShowRideForm] = useState(false);
   const [bookingStatus, setBookingStatus] = useState<'idle' | 'booking' | 'success' | 'error'>('idle');
   const [driverAccepted, setDriverAccepted] = useState(false); // Track when driver accepts the ride
   const [waitingForDriver, setWaitingForDriver] = useState(false); // Track when waiting for driver acceptance
@@ -68,66 +65,6 @@ const RiderDashboard: React.FC = () => {
       console.error('❌ Failed to load driver info:', error);
     }
   }, []);
-
-  // 🚀 REAL-TIME SSE CONNECTION FOR RIDER - NO MORE POLLING!
-  useEffect(() => {
-    if (!user?.id || user.userType !== 'RIDER' || !currentRide) return;
-    
-    console.log('🔗 Connecting rider to SSE for real-time updates...');
-    
-    // Connect to real-time events for rider
-    sseService.connectRiderEvents(user.id, {
-      onDriverLocation: (location) => {
-        console.log('📍 DRIVER LOCATION UPDATE via SSE:', location);
-        setDriverLocation(location);
-      },
-      
-      onRideUpdate: (ride) => {
-        console.log('📱 RIDE UPDATE via SSE:', ride);
-        setCurrentRide(ride);
-        
-        // Handle different ride states
-        if (ride.status === 'DRIVER_ACCEPTED') {
-          setDriverAccepted(true);
-          setWaitingForDriver(false);
-        } else if (ride.status === 'COMPLETED') {
-          setCurrentRide(null);
-          setDriverAccepted(false);
-          setWaitingForDriver(false);
-        } else if (ride.status === 'CANCELLED') {
-          setCancellationNotification({
-            show: true,
-            message: 'Your ride has been cancelled by the driver',
-            type: 'driver'
-          });
-          setCurrentRide(null);
-          setDriverAccepted(false);
-          setWaitingForDriver(false);
-          
-          // Auto-hide notification after 5 seconds
-          setTimeout(() => {
-            setCancellationNotification({ show: false, message: '', type: '' });
-          }, 5000);
-        }
-      },
-      
-      onDriverArrived: () => {
-        console.log('🚗 DRIVER ARRIVED via SSE');
-        // You can add driver arrival notification here
-      },
-      
-      onError: (error) => {
-        console.error('❌ SSE connection error:', error);
-        // Fallback to manual refresh if SSE fails
-      }
-    });
-    
-    // Cleanup SSE connection
-    return () => {
-      console.log('🛑 Disconnecting rider SSE...');
-      sseService.disconnect();
-    };
-  }, [user?.id, user?.userType, currentRide]);
 
   // Function to update user location on server
   const updateUserLocationOnServer = useCallback(async (location: Location) => {
@@ -219,10 +156,6 @@ const RiderDashboard: React.FC = () => {
           // Update user location on server even without address
           await updateUserLocationOnServer(freshGPS);
         }
-        // Reload nearby drivers after location update
-        setTimeout(() => {
-          loadNearbyDrivers();
-        }, 1000);
       } else {
         throw new Error('requestDirectGPS returned null');
       }
@@ -311,22 +244,9 @@ const RiderDashboard: React.FC = () => {
     }
   }, [driverInfo, loadDriverInfo]);
 
-  const loadNearbyDrivers = useCallback(async () => {
-    if (!displayLocation) return;
-    
-    try {
-      setNearbyDrivers([]);
-    } catch (error) {
-      console.error('Failed to load nearby drivers:', error);
-    }
-  }, [displayLocation]);
-
   useEffect(() => {
     loadCurrentRide();
-    if (displayLocation) {
-      loadNearbyDrivers();
-    }
-  }, [displayLocation, loadCurrentRide, loadNearbyDrivers]);
+  }, [displayLocation, loadCurrentRide]);
 
   // Add polling for ride status updates
   useEffect(() => {
@@ -736,7 +656,7 @@ const RiderDashboard: React.FC = () => {
                 driverLocation : // Start route from driver location when driver is coming
                 (pickupLocation || displayLocation) // Original pickup/current location when no driver
             }
-            routingService="osrm"
+            routingService="ors"
             onLocationSelect={isMapPickingMode ? handleLocationSelect : undefined}
             driverAccepted={driverAccepted} // Pass driver acceptance state for animation
             waitingForDriver={waitingForDriver} // Pass waiting state for radiating animation

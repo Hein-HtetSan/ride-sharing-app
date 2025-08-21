@@ -11,7 +11,7 @@ interface OpenStreetMapProps {
   showDirections?: boolean;
   pickup?: Location;
   destination?: Location;
-  routingService?: 'osrm' | 'graphhopper' | 'mapbox';
+  routingService?: 'osrm' | 'ors';
   driverAccepted?: boolean; // New prop to trigger pickup location animation
   waitingForDriver?: boolean; // New prop to show radiating while waiting for driver
   driverLocation?: Location; // Driver's real-time location
@@ -27,7 +27,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   showDirections = false,
   pickup,
   destination,
-  routingService = 'osrm',
+  routingService = 'ors',
   driverAccepted = false,
   waitingForDriver = false,
   driverLocation,

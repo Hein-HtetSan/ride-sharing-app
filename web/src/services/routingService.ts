@@ -12,28 +12,20 @@ class RoutingService {
   private static readonly ORS_API_KEY = import.meta.env.VITE_ORS_API_KEY;
   private static readonly ORS_BASE_URL = 'https://api.openrouteservice.org/v2/directions/driving-car';
 
-  // Alternative: Using GraphHopper (free API with 500 requests/day)
-  private static readonly GRAPHHOPPER_API_KEY = import.meta.env.VITE_GRAPHHOPPER_API_KEY;
-  private static readonly GRAPHHOPPER_BASE_URL = 'https://graphhopper.com/api/1/route';
-
   /**
    * Get route between two points using OpenRouteService
    */
   static async getRoute(start: Location, end: Location): Promise<RouteResponse> {
     try {
-      // Try OpenRouteService first
+      // Use OpenRouteService
       if (this.ORS_API_KEY) {
         return await this.getRouteFromORS(start, end);
+      } else {
+        console.warn('ORS API key not configured, using straight line fallback');
+        return this.getStraightLineRoute(start, end);
       }
-      
-      // Fallback to GraphHopper
-      if (this.GRAPHHOPPER_API_KEY) {
-        return await this.getRouteFromGraphHopper(start, end);
-      }
-
-      // Ultimate fallback: simple straight line
-      return this.getStraightLineRoute(start, end);
-    } catch {
+    } catch (error) {
+      console.error('ORS routing failed, using straight line fallback:', error);
       return this.getStraightLineRoute(start, end);
     }
   }
@@ -70,31 +62,6 @@ class RoutingService {
     };
     
     return result;
-  }
-
-  /**
-   * GraphHopper routing
-   */
-  private static async getRouteFromGraphHopper(start: Location, end: Location): Promise<RouteResponse> {
-    const url = `${this.GRAPHHOPPER_BASE_URL}?point=${start.lat},${start.lng}&point=${end.lat},${end.lng}&vehicle=car&key=${this.GRAPHHOPPER_API_KEY}`;
-    
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`GraphHopper API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const path = data.paths[0];
-    
-    // Decode the geometry (simplified for demo)
-    const coordinates: [number, number][] = path.points.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
-    
-    return {
-      coordinates,
-      distance: path.distance / 1000, // Convert to km
-      duration: path.time / 1000, // Convert to seconds
-    };
   }
 
   /**

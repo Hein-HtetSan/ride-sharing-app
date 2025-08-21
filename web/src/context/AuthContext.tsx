@@ -28,24 +28,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    console.log('🔍 AuthContext: Checking stored authentication...');
     const storedUser = localStorage.getItem('user');
     const storedToken = localStorage.getItem('authToken');
     
+    console.log('📦 Stored user:', storedUser);
+    console.log('🔑 Stored token:', storedToken ? 'Token exists' : 'No token');
+    
     if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        console.log('✅ Restoring user from localStorage:', parsedUser);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('❌ Error parsing stored user data:', error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('authToken');
+      }
+    } else {
+      console.log('❌ No valid stored authentication found');
     }
   }, []);
 
   const login = (userData: User, token: string) => {
+    console.log('🚀 AuthContext: Logging in user:', userData);
+    console.log('🔑 AuthContext: Storing token:', token ? 'Token provided' : 'No token');
+    
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
     localStorage.setItem('authToken', token);
+    
+    console.log('✅ AuthContext: User and token stored successfully');
   };
 
   const logout = () => {
+    console.log('🚪 AuthContext: Logging out user');
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('authToken');
+    console.log('✅ AuthContext: User logged out successfully');
   };
 
   const value = {

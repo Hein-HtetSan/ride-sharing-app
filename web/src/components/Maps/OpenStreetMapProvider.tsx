@@ -10,27 +10,25 @@ declare global {
 interface OpenStreetMapContextProps {
   isLoaded: boolean;
   loadError: boolean;
-  routingService: 'osrm' | 'graphhopper' | 'mapbox';
+  routingService: 'osrm' | 'ors';
 }
 
 const OpenStreetMapContext = createContext<OpenStreetMapContextProps>({
   isLoaded: false,
   loadError: false,
-  routingService: 'osrm'
+  routingService: 'ors'
 });
 
 export const useOpenStreetMap = () => useContext(OpenStreetMapContext);
 
 interface OpenStreetMapProviderProps {
   children: React.ReactNode;
-  routingService?: 'osrm' | 'graphhopper' | 'mapbox';
-  mapboxApiKey?: string; // Only needed if using Mapbox routing
+  routingService?: 'osrm' | 'ors';
 }
 
 export const OpenStreetMapProvider: React.FC<OpenStreetMapProviderProps> = ({ 
   children, 
-  routingService = 'osrm',
-  mapboxApiKey 
+  routingService = 'ors'
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -62,11 +60,6 @@ export const OpenStreetMapProvider: React.FC<OpenStreetMapProviderProps> = ({
           });
         }
 
-        // Validate routing service configuration
-        if (routingService === 'mapbox' && !mapboxApiKey) {
-          throw new Error('Mapbox API key is required when using Mapbox routing service');
-        }
-
         setIsLoaded(true);
       } catch (error) {
         console.error('Failed to load OpenStreetMap:', error);
@@ -75,7 +68,7 @@ export const OpenStreetMapProvider: React.FC<OpenStreetMapProviderProps> = ({
     };
 
     loadLeaflet();
-  }, [routingService, mapboxApiKey]);
+  }, [routingService]);
 
   if (loadError) {
     return (
@@ -92,7 +85,7 @@ export const OpenStreetMapProvider: React.FC<OpenStreetMapProviderProps> = ({
             <ul className="text-red-600 text-sm space-y-1 mb-4 ml-4">
               <li>• Network connectivity issues</li>
               <li>• CDN unavailability</li>
-              <li>• Invalid Mapbox API key (if using Mapbox routing)</li>
+              <li>• Invalid ORS API key configuration</li>
               <li>• Browser blocking external resources</li>
             </ul>
             <div className="bg-blue-50 border border-blue-200 rounded p-2">

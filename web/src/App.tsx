@@ -33,7 +33,7 @@ function AuthWrapper() {
       {/* Protected dashboard routes */}
       <Route path="/rider" element={
         <ProtectedRoute>
-          <OpenStreetMapProvider routingService="osrm">
+          <OpenStreetMapProvider routingService="ors">
             <LocationProvider>
               {isRider ? <RiderDashboard /> : <Navigate to="/driver" replace />}
             </LocationProvider>
@@ -42,7 +42,7 @@ function AuthWrapper() {
       } />
       <Route path="/driver" element={
         <ProtectedRoute>
-          <OpenStreetMapProvider routingService="osrm">
+          <OpenStreetMapProvider routingService="ors">
             <LocationProvider>
               {isDriver ? <DriverDashboard /> : <Navigate to="/rider" replace />}
             </LocationProvider>
@@ -60,7 +60,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <OpenStreetMapProvider routingService="osrm">
+        <OpenStreetMapProvider routingService="ors">
           <div className="App">
             <AuthWrapper />
           </div>

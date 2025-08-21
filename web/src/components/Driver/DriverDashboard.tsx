@@ -11,7 +11,6 @@ import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
 import { rideAPI } from '../../services/api';
 import { Ride, Location } from '../../types';
-import { sseService } from '../../services/sseService';
 
 // Extended ride type with distance
 interface RideWithDistance extends Ride {
@@ -267,7 +266,6 @@ const DriverDashboard: React.FC = () => {
   }, [displayLocation, isOpenForRides, loadCurrentRide, loadAvailableRides]);
 
   // Real-time tracking refs (no polling needed)
-  const rideRequestIntervalRef = useRef<number | null>(null);
   const lastLocationRef = useRef<Location | null>(null);
   const lastRouteCalculationRef = useRef<Location | null>(null);
 
@@ -285,58 +283,6 @@ const DriverDashboard: React.FC = () => {
       // ❌ DISABLED: No automatic route recalculation
     }
   }, [correctLocation, currentLocation]);
-
-  // 🚀 REAL-TIME SSE CONNECTION - NO MORE POLLING!
-  useEffect(() => {
-    if (!user?.id || user.userType !== 'DRIVER') return;
-    
-    console.log('🔗 Connecting to SSE for real-time updates...');
-    
-    // Connect to real-time events
-    sseService.connectDriverEvents(user.id, {
-      onRideRequest: (ride) => {
-        console.log('🔔 NEW RIDE REQUEST via SSE:', ride);
-        setAvailableRides([ride]);
-        setNewRideNotification(true);
-        
-        // Auto-hide notification after 5 seconds
-        setTimeout(() => setNewRideNotification(false), 5000);
-      },
-      
-      onRideUpdate: (ride) => {
-        console.log('� RIDE UPDATE via SSE:', ride);
-        setCurrentRide(ride);
-        
-        // If ride is completed or cancelled, reload available rides
-        if (ride.status === 'COMPLETED' || ride.status === 'CANCELLED') {
-          setCurrentRide(null);
-          if (isOpenForRides && displayLocation) {
-            // Only load available rides once when ride ends
-            loadAvailableRides();
-          }
-        }
-      },
-      
-      onRideCancelled: (rideId) => {
-        console.log('❌ RIDE CANCELLED via SSE:', rideId);
-        setCurrentRide(null);
-        if (isOpenForRides && displayLocation) {
-          loadAvailableRides();
-        }
-      },
-      
-      onError: (error) => {
-        console.error('❌ SSE connection error:', error);
-        // Fallback to manual refresh if SSE fails
-      }
-    });
-    
-    // Cleanup SSE connection
-    return () => {
-      console.log('🛑 Disconnecting SSE...');
-      sseService.disconnect();
-    };
-  }, [user?.id, user?.userType, isOpenForRides, displayLocation, loadAvailableRides]);
 
     // 📍 Minimal location tracking (only for server updates)
   useEffect(() => {
@@ -543,7 +489,7 @@ const DriverDashboard: React.FC = () => {
                 }
               }
               pickup={displayLocation}  // Driver's current location
-              routingService="osrm"
+              routingService="ors"
             />
           ) : (
             <div className="w-full h-full bg-gray-200 flex items-center justify-center">
@@ -724,7 +670,7 @@ const DriverDashboard: React.FC = () => {
                 }))
             ]}
             waitingForDriver={true}  // Enable radiation effect for waiting riders
-            routingService="osrm"
+            routingService="ors"
           />
         ) : (
           <div className="w-full h-full bg-gray-200 flex items-center justify-center">

@@ -26,10 +26,20 @@ const LoginForm: React.FC<LoginFormProps> = ({ userType }) => {
     setError('');
 
     try {
+      console.log('🔐 LoginForm: Attempting login with phone:', formData.phone);
       const response = await authAPI.login(formData.phone, formData.password);
-      login(response.data.user, response.data.token);
+      console.log('📡 LoginForm: Full API response:', response);
+      
+      // The API returns: { success: true, message: "...", data: { user: {...}, token: "..." } }
+      const { user, token } = response.data;
+      console.log('👤 LoginForm: Extracted user:', user);
+      console.log('🔑 LoginForm: Extracted token:', token ? 'Token received' : 'No token');
+      
+      login(user, token);
+      console.log('✅ LoginForm: Login context updated, navigating to:', userType === 'DRIVER' ? '/driver' : '/rider');
       navigate(userType === 'DRIVER' ? '/driver' : '/rider');
     } catch (err: any) {
+      console.error('❌ LoginForm: Login error:', err);
       setError(err.response?.data?.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);

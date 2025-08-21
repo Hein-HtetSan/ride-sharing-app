@@ -195,48 +195,6 @@
   }
 }
 
-/* Google Maps Styles - Clean and Professional */
-.google-map-container {
-  height: 100% !important;
-  width: 100% !important;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-/* Google Maps watermark removal */
-.google-map-container a[href*="maps.google.com/maps?ll="],
-.google-map-container a[href*="google.com/maps/place"] {
-  display: none !important;
-}
-
-.google-map-container .gm-style-cc {
-  display: none !important;
-}
-
-.google-map-container .gmnoprint {
-  display: none !important;
-}
-
-.google-map-container .gm-bundled-control-on-bottom {
-  display: none !important;
-}
-
-.google-map-container .gm-style .gmnoprint,
-.google-map-container .gm-style .gm-style-cc {
-  display: none !important;
-}
-
-/* Hide Google logo and terms */
-.google-map-container a[title="Open this area in Google Maps (opens a new window)"],
-.google-map-container a[title="Click to see this area on Google Maps"] {
-  display: none !important;
-}
-
-/* More specific selectors for development watermark */
-.google-map-container [style*="position: absolute"][style*="z-index: 1000000"] {
-  display: none !important;
-}
-
 /* Driver acceptance animation for pickup marker */
 @keyframes driver-acceptance-pulse {
   0% {
