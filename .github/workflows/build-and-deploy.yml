@@ -117,19 +117,22 @@ jobs:
           if [ ! -d ".git" ]; then
             git clone https://github.com/Hein-HtetSan/ride-sharing-app.git .
           else
-            git pull origin main
+            echo "🔄 Updating repository..."
+            git fetch origin
+            git reset --hard origin/main
+            git clean -fd
           fi
           
           # Create production environment file
           cat > .env << EOF
           POSTGRES_DB=ride_sharing
           POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+          POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD || 'postgres_default_password' }}
           DB_HOST=database
           DB_PORT=5432
           DB_NAME=ride_sharing
           DB_USER=postgres
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD || 'postgres_default_password' }}
           RMI_HOST=rmi-server
           RMI_PORT=1099
           IMAGE_PREFIX=ghcr.io/hein-htetsan/ride-sharing-app
@@ -156,7 +159,7 @@ jobs:
           if [ ! -f /etc/letsencrypt/live/sharelite.site/fullchain.pem ]; then
             echo "🔒 Setting up SSL certificates..."
             sudo apt-get update && sudo apt-get install -y certbot python3-certbot-nginx
-            sudo certbot --nginx -d sharelite.site -d www.sharelite.site -d api.sharelite.site --email ${{ secrets.SSL_EMAIL }} --agree-tos --non-interactive || echo "SSL setup will be done manually"
+            sudo certbot --nginx -d sharelite.site -d www.sharelite.site -d api.sharelite.site --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive || echo "SSL setup will be done manually"
           fi
           
           # Update nginx configuration
