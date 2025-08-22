@@ -14,33 +14,36 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE)
-    public CorsWebFilter corsWebFilter() {
-        CorsConfiguration config = new CorsConfiguration();
-        
-        // Allow credentials
-        config.setAllowCredentials(true);
-        
-        // Allow all origins for testing (remove in production)
-        config.addAllowedOriginPattern("*");
-        
-        // Allow all headers
-        config.addAllowedHeader("*");
-        
-        // Allow all HTTP methods explicitly
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        
-        // Expose headers
-        config.setExposedHeaders(List.of("*"));
-        
-        // Max age for preflight
-        config.setMaxAge(3600L);
-        
-        // Apply CORS to all paths
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        
-        return new CorsWebFilter(source);
-    }
+    // Disable Spring Boot CORS - nginx will handle CORS headers
+    // This prevents duplicate CORS headers that cause browser errors
+    
+    // @Bean
+    // @Order(Ordered.HIGHEST_PRECEDENCE)
+    // public CorsWebFilter corsWebFilter() {
+    //     CorsConfiguration config = new CorsConfiguration();
+    //     
+    //     // Allow credentials
+    //     config.setAllowCredentials(true);
+    //     
+    //     // Allow all origins for testing (remove in production)
+    //     config.addAllowedOriginPattern("*");
+    //     
+    //     // Allow all headers
+    //     config.addAllowedHeader("*");
+    //     
+    //     // Allow all HTTP methods explicitly
+    //     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
+    //     
+    //     // Expose headers
+    //     config.setExposedHeaders(List.of("*"));
+    //     
+    //     // Max age for preflight
+    //     config.setMaxAge(3600L);
+    //     
+    //     // Apply CORS to all paths
+    //     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    //     source.registerCorsConfiguration("/**", config);
+    //     
+    //     return new CorsWebFilter(source);
+    // }
 }
