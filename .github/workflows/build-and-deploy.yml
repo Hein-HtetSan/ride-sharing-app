@@ -155,20 +155,26 @@ jobs:
           echo "⏳ Waiting for containers to initialize..."
           sleep 30
           
-          # Setup SSL certificates if not exists or regenerate to include API subdomain
+          # Setup or renew SSL certificates using standalone mode (no host nginx)
+          # Stop Docker nginx temporarily to free ports 80/443 for certbot standalone
+          echo "🛑 Temporarily stopping Docker nginx for certificate issuance..."
+          sudo docker compose -f docker-compose.prod.yml stop nginx || true
+
           if [ ! -f /etc/letsencrypt/live/sharelite.site/fullchain.pem ]; then
-            echo "🔒 Setting up SSL certificates for the first time..."
-            sudo apt-get update && sudo apt-get install -y certbot python3-certbot-nginx
-            sudo certbot --nginx -d sharelite.site -d www.sharelite.site -d api.sharelite.site --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive || echo "SSL setup will be done manually"
+            echo "🔒 Issuing SSL certificates (first time)..."
+            sudo apt-get update && sudo apt-get install -y certbot
+            sudo certbot certonly --standalone -d sharelite.site -d www.sharelite.site -d api.sharelite.site \
+              --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive || echo "SSL setup will be done manually"
           else
-            echo "🔒 Updating SSL certificates to include API subdomain..."
-            sudo certbot --nginx -d sharelite.site -d www.sharelite.site -d api.sharelite.site --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive --expand || echo "SSL certificate already includes all domains"
+            echo "🔒 Renewing/expanding SSL certificates (standalone mode)..."
+            sudo apt-get update && sudo apt-get install -y certbot
+            sudo certbot certonly --standalone -d sharelite.site -d www.sharelite.site -d api.sharelite.site \
+              --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive --keep-until-expiring || echo "SSL certificate already valid"
           fi
-          
-          # Update nginx configuration
-          sudo cp nginx/nginx.conf /etc/nginx/sites-available/sharelite.site
-          sudo ln -sf /etc/nginx/sites-available/sharelite.site /etc/nginx/sites-enabled/
-          sudo nginx -t && sudo systemctl reload nginx || echo "Nginx config will be updated manually"
+
+          # Start Docker nginx again (it reads certs from /etc/letsencrypt mounted read-only)
+          echo "🚀 Starting Docker nginx again..."
+          sudo docker compose -f docker-compose.prod.yml up -d nginx
           
           # Make the check script executable and run service checks
           chmod +x scripts/check-services-prod.sh
