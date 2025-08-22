@@ -11,11 +11,17 @@ public class WebConfig implements WebFluxConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
-                .allowedOrigins("http://localhost:3000", "http://localhost:5173") // React dev servers
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true)
-                .maxAge(3600);
+    registry.addMapping("/**")
+        .allowedOrigins(
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://sharelite.site",
+            "https://www.sharelite.site",
+            "https://api.sharelite.site"
+        )
+        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        .allowedHeaders("*")
+        .allowCredentials(true)
+        .maxAge(3600);
     }
 }
