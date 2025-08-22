@@ -89,8 +89,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt/live/sharelite.site:/etc/letsencrypt/live/sharelite.site:ro
+      - /etc/letsencrypt/archive/sharelite.site:/etc/letsencrypt/archive/sharelite.site:ro
     depends_on:
       - web
       - api

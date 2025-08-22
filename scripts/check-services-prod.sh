@@ -77,8 +77,12 @@ check_api() {
     # Also check external API endpoint if in production mode
     if [ "$PRODUCTION_MODE" = true ]; then
         echo -e "  ${YELLOW}⏳ Checking external API endpoint...${NC}"
-        if curl -s -f https://api.sharelite.site/health >/dev/null 2>&1 || curl -s -f https://api.sharelite.site/api/v1/health >/dev/null 2>&1; then
-            echo -e "  ${GREEN}✅ External API is accessible${NC}"
+        if curl -s -f https://api.sharelite.site/swagger-ui.html >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✅ External API and Swagger UI are accessible${NC}"
+        elif curl -s -f https://api.sharelite.site/api/v1/health >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✅ External API health endpoint is accessible${NC}"
+        elif curl -s -f https://api.sharelite.site/ >/dev/null 2>&1; then
+            echo -e "  ${YELLOW}⚠️ External API responds but health check failed${NC}"
         else
             echo -e "  ${YELLOW}⚠️ External API not yet accessible (SSL/DNS might still be setting up)${NC}"
         fi
