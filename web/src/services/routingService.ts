@@ -15,6 +15,21 @@ class RoutingService {
   // OSRM fallback (free, no API key required)
   private static readonly OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
+  // Use same-origin proxies in production to avoid CORS/network blocks
+  private static get orsBase(): string {
+    if (typeof window !== 'undefined' && window.location.hostname.endsWith('sharelite.site')) {
+      return '/routing/ors/v2/directions/driving-car';
+    }
+    return this.ORS_BASE_URL;
+  }
+
+  private static get osrmBase(): string {
+    if (typeof window !== 'undefined' && window.location.hostname.endsWith('sharelite.site')) {
+      return '/routing/osrm/route/v1/driving';
+    }
+    return this.OSRM_BASE_URL;
+  }
+
   /**
    * Get route between two points using OpenRouteService with OSRM fallback
    */
@@ -51,7 +66,7 @@ class RoutingService {
    * OpenRouteService routing
    */
   private static async getRouteFromORS(start: Location, end: Location): Promise<RouteResponse> {
-    const url = `${this.ORS_BASE_URL}?api_key=${this.ORS_API_KEY}&start=${start.lng},${start.lat}&end=${end.lng},${end.lat}`;
+  const url = `${this.orsBase}?api_key=${this.ORS_API_KEY}&start=${start.lng},${start.lat}&end=${end.lng},${end.lat}`;
     
     console.log('📡 ORS API Request:', url.replace(this.ORS_API_KEY || '', '[API_KEY]'));
     
@@ -119,7 +134,7 @@ class RoutingService {
    * OSRM routing (free, no API key required)
    */
   private static async getRouteFromOSRM(start: Location, end: Location): Promise<RouteResponse> {
-    const url = `${this.OSRM_BASE_URL}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+  const url = `${this.osrmBase}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
     
     console.log('📡 OSRM API Request:', url);
     
