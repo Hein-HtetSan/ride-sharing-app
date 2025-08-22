@@ -70,9 +70,9 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         build-args: |
-          VITE_API_URL=${{ matrix.service == 'web' && 'http://api.sharelite.site' || '' }}
-          VITE_API_BASE_URL=${{ matrix.service == 'web' && 'http://api.sharelite.site/api' || '' }}
-          VITE_WS_URL=${{ matrix.service == 'web' && 'ws://api.sharelite.site' || '' }}
+          VITE_API_URL=${{ matrix.service == 'web' && 'https://api.sharelite.site' || '' }}
+          VITE_API_BASE_URL=${{ matrix.service == 'web' && 'https://api.sharelite.site/api' || '' }}
+          VITE_WS_URL=${{ matrix.service == 'web' && 'wss://api.sharelite.site' || '' }}
           VITE_FRONTEND_URL=${{ matrix.service == 'web' && 'https://sharelite.site' || '' }}
           VITE_ORS_API_KEY=${{ matrix.service == 'web' && secrets.ORS_API_KEY || '' }}
           VITE_REACT_APP_GOOGLE_MAPS_API_KEY=${{ matrix.service == 'web' && secrets.GOOGLE_MAPS_API_KEY || '' }}
@@ -155,11 +155,14 @@ jobs:
           echo "⏳ Waiting for containers to initialize..."
           sleep 30
           
-          # Setup SSL certificates if not exists
+          # Setup SSL certificates if not exists or regenerate to include API subdomain
           if [ ! -f /etc/letsencrypt/live/sharelite.site/fullchain.pem ]; then
-            echo "🔒 Setting up SSL certificates..."
+            echo "🔒 Setting up SSL certificates for the first time..."
             sudo apt-get update && sudo apt-get install -y certbot python3-certbot-nginx
             sudo certbot --nginx -d sharelite.site -d www.sharelite.site -d api.sharelite.site --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive || echo "SSL setup will be done manually"
+          else
+            echo "🔒 Updating SSL certificates to include API subdomain..."
+            sudo certbot --nginx -d sharelite.site -d www.sharelite.site -d api.sharelite.site --email ${{ secrets.SSL_EMAIL || 'admin@sharelite.site' }} --agree-tos --non-interactive --expand || echo "SSL certificate already includes all domains"
           fi
           
           # Update nginx configuration
