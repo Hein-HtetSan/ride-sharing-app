@@ -1,6 +1,8 @@
 package com.rsrmi.api.filter;
 
 import com.rsrmi.api.util.JwtUtil;
+import org.springframework.core.Ordered;
+import org.springframework.lang.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -10,9 +12,9 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 @Component
-public class JwtWebFilter implements WebFilter {
+public class JwtWebFilter implements WebFilter, Ordered {
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+    public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         String method = exchange.getRequest().getMethod().name();
         
@@ -22,7 +24,7 @@ public class JwtWebFilter implements WebFilter {
         }
         
         // Protect /api/v1/users/get and /api/v1/users/update (expand as needed)
-        if (
+    if (
             path.startsWith("/api/v1/users/get") ||
             path.startsWith("/api/v1/users/update") ||
             path.startsWith("/api/v1/users/location") ||
@@ -38,7 +40,7 @@ public class JwtWebFilter implements WebFilter {
             path.startsWith("/api/v1/rides/pending") ||
 
             path.startsWith("/api/v1/drivers/get") ||
-            path.startsWith("api/v1/drivers/update")
+            path.startsWith("/api/v1/drivers/update")
         ) {
             String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -58,5 +60,11 @@ public class JwtWebFilter implements WebFilter {
             }
         }
         return chain.filter(exchange);
+    }
+
+    // Run after CORS (CorsWebFilter has higher precedence by default)
+    @Override
+    public int getOrder() {
+        return Ordered.LOWEST_PRECEDENCE;
     }
 }

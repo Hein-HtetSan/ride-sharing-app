@@ -2,6 +2,11 @@ package com.rsrmi.api.controller;
 
 import com.rsrmi.api.service.UserServiceRmiClient;
 import com.rsrmi.api.service.LocationServiceRmiClient;
+import com.rsrmi.api.service.RideServiceRmiClient;
+import com.rsrmi.api.events.RideEvent;
+import com.rsrmi.api.events.RideEventService;
+import com.rsrmi.api.events.RideEventType;
+import com.rsrmi.api.model.Ride;
 import com.rsrmi.api.model.User;
 import com.rsrmi.api.model.UserLocation;
 
@@ -11,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
@@ -36,6 +40,12 @@ public class UserController {
 
     @Autowired
     private LocationServiceRmiClient locationServiceRmiClient;
+
+    @Autowired
+    private RideServiceRmiClient rideServiceRmiClient;
+
+    @Autowired
+    private RideEventService rideEventService;
 
     // Register a user via RMI
     @PostMapping("/register")
@@ -161,6 +171,13 @@ public class UserController {
     ) {
         return Mono.fromCallable(() -> {
             try {
+                // First verify that the user exists
+                User existingUser = userServiceRmiClient.getById(userId);
+                if (existingUser == null) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(new ApiResponse(false, "User with ID " + userId + " does not exist. Please register again."));
+                }
+                
                 // Set the current time if not provided
                 if (userLocation.getLastUpdated() == null) {
                     userLocation.setLastUpdated(LocalDateTime.now());
@@ -174,6 +191,21 @@ public class UserController {
                     userLocation
                 );
                 if (isUserLocationUpdated) {
+                    // If this user has an active ride as a rider, emit rider location to the ride SSE stream
+                    try {
+                        Ride active = rideServiceRmiClient.getCurrentRide(userId);
+                        if (active != null && active.getRiderId() == userId) {
+                            Ride.Status st = active.getStatus();
+                            if (st != Ride.Status.COMPLETED && st != Ride.Status.CANCELLED) {
+                                RideEvent event = new RideEvent((long) active.getId(), RideEventType.RIDER_LOCATION);
+                                event.setLat(userLocation.getLatitude());
+                                event.setLng(userLocation.getLongitude());
+                                rideEventService.publish(event);
+                            }
+                        }
+                    } catch (Exception ignore) {
+                        // Non-blocking: location updated even if event emission fails
+                    }
                     return ResponseEntity.ok(new ApiResponse(true, "Location updated successfully"));
                 } else {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)

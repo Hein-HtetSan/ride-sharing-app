@@ -16,6 +16,9 @@ interface OpenStreetMapProps {
   waitingForDriver?: boolean; // New prop to show radiating while waiting for driver
   driverLocation?: Location; // Driver's real-time location
   driverInfo?: { id: number; username: string; phone: string }; // Driver information
+  routeKey?: string; // Key to control route recalculation
+  followUser?: boolean; // Enable following user for navigation mode
+  navigationMode?: boolean; // Enable navigation-specific styling and behavior
 }
 
 const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
@@ -31,7 +34,10 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   driverAccepted = false,
   waitingForDriver = false,
   driverLocation,
-  driverInfo
+  driverInfo,
+  routeKey,
+  followUser = false,
+  navigationMode = false
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<unknown>(null);
@@ -82,6 +88,8 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   useEffect(() => {
     if (!isLoaded || !mapRef.current || mapInstance.current || !window.L) return;
 
+    console.log('🗺️ Initializing OpenStreetMap, onLocationSelect available:', !!onLocationSelect);
+
     try {
       // Get Leaflet from window object
       const L = (window as any).L;
@@ -98,85 +106,119 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         maxZoom: 19
       }).addTo(mapInstance.current);
 
-      // Add click listener for location selection
-      if (onLocationSelect) {
-        (mapInstance.current as any).on('click', async (e: { latlng: { lat: number; lng: number } }) => {
-          const { lat, lng } = e.latlng;
-          
-          
-          // Add temporary marker to show user where they clicked
-          const L = (window as any).L;
-          const tempMarker = L.marker([lat, lng], {
-            icon: L.divIcon({
-              html: '<div style="background: #3b82f6; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: pulse 1s infinite;"></div>',
-              className: 'temp-marker',
-              iconSize: [20, 20],
-              iconAnchor: [10, 10]
-            })
-          }).addTo(mapInstance.current);
-          
-          try {
-            
-            // Use reverse geocoding via Nominatim (OpenStreetMap's geocoding service)
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-              {
-                headers: {
-                  'User-Agent': 'RideWithUs/1.0'
-                }
-              }
-            );
-            
-            const data = await response.json();
-            
-            if (data && data.display_name) {
-              const location: Location = {
-                lat,
-                lng,
-                address: data.display_name,
-                streetName: data.address?.road,
-                city: data.address?.city || data.address?.town || data.address?.village,
-                country: data.address?.country,
-                postalCode: data.address?.postcode
-              };
-              
-              onLocationSelect(location);
-            } else {
-              onLocationSelect({
-                lat,
-                lng,
-                address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-              });
-            }
-          } catch (error) {
-            console.error('❌ Map click geocoding failed:', error);
-            onLocationSelect({
-              lat,
-              lng,
-              address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-            });
-          } finally {
-            // Remove temporary marker after a short delay
-            setTimeout(() => {
-              (mapInstance.current as any).removeLayer(tempMarker);
-            }, 2000);
-          }
-        });
-      }
-
     } catch (error) {
       console.error('Failed to initialize OpenStreetMap:', error);
       setError('Failed to initialize map. Please refresh the page.');
     }
-  }, [isLoaded, center, zoom, onLocationSelect]);
+  }, [isLoaded, center, zoom]);
+
+  // Handle click listener separately to avoid re-initializing the entire map
+  useEffect(() => {
+    if (!mapInstance.current || !window.L) return;
+
+    const L = (window as any).L;
+    
+    // Remove existing click listeners
+    (mapInstance.current as any).off('click');
+    
+    // Add click listener for location selection if handler is provided
+    if (onLocationSelect) {
+      console.log('🗺️ Adding/updating map click listener for location selection');
+      (mapInstance.current as any).on('click', async (e: { latlng: { lat: number; lng: number } }) => {
+        const { lat, lng } = e.latlng;
+        console.log('🎯 Map clicked at coordinates:', lat, lng);
+        
+        // Add temporary marker to show user where they clicked
+        const tempMarker = L.marker([lat, lng], {
+          icon: L.divIcon({
+            html: '<div style="background: #3b82f6; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: pulse 1s infinite;"></div>',
+            className: 'temp-marker',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          })
+        }).addTo(mapInstance.current);
+        
+        try {
+          console.log('🔍 Performing reverse geocoding...');
+          // Use reverse geocoding via Nominatim (OpenStreetMap's geocoding service)
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+            {
+              headers: {
+                'User-Agent': 'RideWithUs/1.0'
+              }
+            }
+          );
+          
+          const data = await response.json();
+          
+          if (data && data.display_name) {
+            const location: Location = {
+              lat,
+              lng,
+              address: data.display_name,
+              streetName: data.address?.road,
+              city: data.address?.city || data.address?.town || data.address?.village,
+              country: data.address?.country,
+              postalCode: data.address?.postcode
+            };
+            
+            console.log('✅ Reverse geocoding successful:', location.address);
+            onLocationSelect(location);
+          } else {
+            const location = {
+              lat,
+              lng,
+              address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+            };
+            console.log('⚠️ Reverse geocoding failed, using coordinates:', location.address);
+            onLocationSelect(location);
+          }
+        } catch (error) {
+          console.error('❌ Map click geocoding failed:', error);
+          const location = {
+            lat,
+            lng,
+            address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          };
+          console.log('🔧 Fallback to coordinates:', location.address);
+          onLocationSelect(location);
+        } finally {
+          // Remove temporary marker after a short delay
+          setTimeout(() => {
+            (mapInstance.current as any).removeLayer(tempMarker);
+          }, 2000);
+        }
+      });
+    } else {
+      console.log('🗺️ No onLocationSelect handler provided, map clicks disabled');
+    }
+  }, [onLocationSelect]);
 
   // Update map center when center prop changes
   useEffect(() => {
     
     if (mapInstance.current) {
-      (mapInstance.current as any).setView([center.lat, center.lng], zoom);
+      if (navigationMode && followUser) {
+        // In navigation mode, smoothly follow the user with higher zoom
+        const map = mapInstance.current as any;
+        map.setView([center.lat, center.lng], Math.max(zoom, 18), { 
+          animate: true, 
+          duration: 1 // Smooth animation
+        });
+        
+        // Keep user location centered during navigation
+        setTimeout(() => {
+          if (map && center) {
+            map.panTo([center.lat, center.lng], { animate: true, duration: 0.5 });
+          }
+        }, 500);
+      } else {
+        // Normal map behavior
+        (mapInstance.current as any).setView([center.lat, center.lng], zoom);
+      }
     }
-  }, [center, zoom]);
+  }, [center, zoom, navigationMode, followUser]);
 
   // Handle markers
   useEffect(() => {
@@ -216,9 +258,9 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         markerTitle = driverInfo ? `Driver: ${driverInfo.username}` : 'Your Driver';
       } else if (isCurrentLocation && !isPickupLocation) {
         markerType = 'CURRENT';
-        markerColor = '#22c55e'; // Green
-        markerEmoji = '📍';
-        markerTitle = 'Current Location';
+        markerColor = navigationMode ? '#3b82f6' : '#22c55e'; // Blue in navigation mode, green otherwise
+        markerEmoji = navigationMode ? '🧭' : '📍';
+        markerTitle = navigationMode ? 'You are here (Navigation)' : 'Current Location';
       } else if (isPickupLocation) {
         markerType = 'PICKUP';
         markerColor = '#3b82f6'; // Blue
@@ -245,16 +287,16 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       // Create custom marker icon with radiating animation
       const markerIcon = L.divIcon({
         html: `
-          <div class="marker-container">
+          <div class="marker-container ${navigationMode && isCurrentLocation ? 'navigation-marker' : ''}">
             <div class="marker-pulse" style="
               position: absolute;
-              width: 60px;
-              height: 60px;
+              width: ${navigationMode && isCurrentLocation ? '80px' : '60px'};
+              height: ${navigationMode && isCurrentLocation ? '80px' : '60px'};
               border-radius: 50%;
               background-color: ${markerColor}40;
-              top: -14px;
-              left: -14px;
-              animation: pulse-ring 2s infinite ease-out;
+              top: ${navigationMode && isCurrentLocation ? '-24px' : '-14px'};
+              left: ${navigationMode && isCurrentLocation ? '-24px' : '-14px'};
+              animation: pulse-ring ${navigationMode && isCurrentLocation ? '1.5s' : '2s'} infinite ease-out;
               z-index: 1;
             "></div>
             ${(isPickupLocation && (waitingForDriver || driverAccepted)) || isRiderWaiting ? `
@@ -294,15 +336,15 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             ` : ''}
             <div style="
               background-color: ${markerColor};
-              width: 32px;
-              height: 32px;
+              width: ${navigationMode && isCurrentLocation ? '40px' : '32px'};
+              height: ${navigationMode && isCurrentLocation ? '40px' : '32px'};
               border-radius: 50%;
-              border: 4px solid white;
-              box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+              border: ${navigationMode && isCurrentLocation ? '5px' : '4px'} solid white;
+              box-shadow: 0 4px 8px rgba(0,0,0,0.5), ${navigationMode && isCurrentLocation ? '0 0 20px rgba(59, 130, 246, 0.6)' : 'none'};
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 16px;
+              font-size: ${navigationMode && isCurrentLocation ? '20px' : '16px'};
               font-weight: bold;
               color: white;
               z-index: 2;
@@ -311,8 +353,8 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           </div>
         `,
         className: 'custom-marker-animated',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
+        iconSize: navigationMode && isCurrentLocation ? [40, 40] : [32, 32],
+        iconAnchor: navigationMode && isCurrentLocation ? [20, 20] : [16, 16]
       });
 
       const marker = L.marker([markerLocation.lat, markerLocation.lng], {
@@ -492,6 +534,15 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         .custom-marker-animated .marker-pulse {
           animation: pulse-ring 2s infinite ease-out;
         }
+        .navigation-mode {
+          filter: brightness(0.9) contrast(1.1);
+        }
+        .navigation-mode .leaflet-control-container {
+          opacity: 0.7;
+        }
+        .navigation-mode .leaflet-control-zoom {
+          display: none;
+        }
       `}</style>
       <div 
         ref={mapRef} 
@@ -501,10 +552,10 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           minHeight: '300px',
           position: 'relative',
           zIndex: 1,
-          cursor: 'crosshair'
+          cursor: navigationMode ? 'default' : 'crosshair'
         }}
-        className="leaflet-map-wrapper"
-        title="Click anywhere to set destination"
+        className={`leaflet-map-wrapper ${navigationMode ? 'navigation-mode' : ''}`}
+        title={navigationMode ? "Navigation Active" : "Click anywhere to set destination"}
       />
     </div>
   );

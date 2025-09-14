@@ -8,6 +8,7 @@ import { LocationService } from '../../services/locationService';
 import { RoutingService } from '../../services/routingService';
 import Header from '../Layout/Header';
 import { OpenStreetMap, LocationSearch } from '../Maps';
+import { subscribeRideEvents, RideEvent as RideEvt } from '../../services/events';
 
 
 const RiderDashboard: React.FC = () => {
@@ -37,34 +38,181 @@ const RiderDashboard: React.FC = () => {
   const { currentLocation, requestDirectGPS } = useLocation();
   const { user, isAuthenticated } = useAuth();
 
+  // Centralized function to clear all dashboard fields
+  const clearAllDashboardFields = useCallback(() => {
+    console.log('🧹 Clearing all dashboard fields');
+    
+    // Clear ride-related states
+    setWaitingForDriver(false);
+    setDriverAccepted(false);
+    setBookingStatus('idle');
+    setCurrentRide(null);
+    setDriverLocation(null);
+    setDriverInfo(null);
+    
+    // Clear all location and route fields
+    setPickupLocation(null);
+    setDestinationLocation(null);
+    setPickup('');
+    setDestination('');
+    setEstimatedDuration('');
+    setEstimatedDistance('');
+    
+    // Reset map picking mode
+    setIsMapPickingMode(false);
+    setPickupFieldMode(false);
+    
+    // Clear any notifications
+    setCancellationNotification({
+      show: false,
+      message: '',
+      type: 'other'
+    });
+    
+    console.log('✅ All dashboard fields cleared');
+  }, []);
+
   // Function to load driver information and location
   const loadDriverInfo = useCallback(async (driverId: number) => {
     try {
       console.log('🚗 Loading driver info for ID:', driverId);
+      console.log('🔍 Debug - Current states before API call:', {
+        driverAccepted,
+        currentRide: currentRide?.id,
+        hasDriverInfo: !!driverInfo,
+        hasDriverLocation: !!driverLocation
+      });
       
       // Get driver details
+      console.log('👤 Fetching driver details from API...');
       const driverResponse = await userAPI.getUserById(driverId);
+      console.log('👤 Driver API response:', driverResponse);
+      console.log('🔍 Driver response structure:', {
+        success: driverResponse.success,
+        hasData: !!driverResponse.data,
+        dataType: typeof driverResponse.data,
+        dataKeys: driverResponse.data ? Object.keys(driverResponse.data) : 'no data'
+      });
+      
       if (driverResponse.success && driverResponse.data) {
         const driverData = driverResponse.data as Driver;
+        console.log('✅ Setting driver info:', driverData);
         setDriverInfo(driverData);
-        console.log('✅ Driver info loaded:', driverData);
+        console.log('✅ Driver info loaded and set in state');
+        
+        // Try to extract location from driver user data immediately
+        if (driverData.currentLocation) {
+          console.log('📍 Found location in driver user data:', driverData.currentLocation);
+          const userLocationData: Location = {
+            lat: driverData.currentLocation.lat,
+            lng: driverData.currentLocation.lng,
+            address: driverData.currentLocation.address || 'Driver location (from profile)'
+          };
+          console.log('✅ Setting driver location from user profile:', userLocationData);
+          setDriverLocation(userLocationData);
+        }
+      } else {
+        console.error('⚠️ No driver data found in response:', driverResponse);
+        console.error('🔍 Detailed response analysis:', {
+          response: driverResponse,
+          success: driverResponse.success,
+          data: driverResponse.data,
+          hasSuccess: 'success' in driverResponse,
+          hasData: 'data' in driverResponse
+        });
       }
       
       // Get driver's real-time location
+      console.log('📡 Fetching driver location for ID:', driverId);
       const locationResponse = await locationAPI.getRealTimeLocation(driverId.toString());
-      if (locationResponse && locationResponse.latitude && locationResponse.longitude) {
-        const driverLoc: Location = {
-          lat: locationResponse.latitude,
-          lng: locationResponse.longitude,
-          address: locationResponse.address || 'Driver location'
-        };
-        setDriverLocation(driverLoc);
-        console.log('📍 Driver location loaded:', driverLoc);
+      console.log('📍 Driver location API response:', locationResponse);
+      console.log('🔍 Location response structure:', {
+        hasLatitude: 'latitude' in (locationResponse || {}),
+        hasLongitude: 'longitude' in (locationResponse || {}),
+        latitude: locationResponse?.latitude,
+        longitude: locationResponse?.longitude,
+        responseKeys: locationResponse ? Object.keys(locationResponse) : 'no response',
+        fullResponse: locationResponse
+      });
+      
+      // Check if response has success field (like other APIs)
+      let actualLocationData = locationResponse;
+      if (locationResponse && 'success' in locationResponse && locationResponse.success && locationResponse.data) {
+        console.log('📍 Location response has success wrapper, extracting data...');
+        actualLocationData = locationResponse.data;
+        console.log('📍 Extracted location data:', actualLocationData);
       }
+      
+      if (actualLocationData && actualLocationData.latitude && actualLocationData.longitude) {
+        const driverLoc: Location = {
+          lat: actualLocationData.latitude,
+          lng: actualLocationData.longitude,
+          address: actualLocationData.address || 'Driver location'
+        };
+        console.log('✅ Setting driver location:', driverLoc);
+        setDriverLocation(driverLoc);
+        console.log('✅ Driver location loaded and set in state');
+      } else {
+        console.warn('⚠️ No valid driver location found, response:', locationResponse);
+        console.warn('⚠️ Actual location data:', actualLocationData);
+        
+        // Try to get location from driver user data as fallback
+        if (driverResponse.success && driverResponse.data?.currentLocation) {
+          const fallbackLocation: Location = {
+            lat: driverResponse.data.currentLocation.lat,
+            lng: driverResponse.data.currentLocation.lng,
+            address: driverResponse.data.currentLocation.address || 'Driver location (from user data)'
+          };
+          console.log('✅ Setting fallback driver location:', fallbackLocation);
+          setDriverLocation(fallbackLocation);
+          console.log('✅ Using fallback driver location from user data');
+        } else {
+          console.warn('⚠️ No fallback location available in driver data');
+          console.warn('⚠️ Driver data structure:', {
+            hasDriverData: !!driverResponse.data,
+            hasCurrentLocation: !!(driverResponse.data?.currentLocation),
+            driverDataKeys: driverResponse.data ? Object.keys(driverResponse.data) : 'no data'
+          });
+          
+          // Final fallback: Try to get location from current ride data
+          if (currentRide && currentRide.pickupLatitude && currentRide.pickupLongitude) {
+            console.log('📍 Using pickup location as driver fallback location');
+            const pickupFallback: Location = {
+              lat: currentRide.pickupLatitude,
+              lng: currentRide.pickupLongitude,
+              address: currentRide.pickupAddress || 'Pickup location (driver approaching)'
+            };
+            setDriverLocation(pickupFallback);
+            console.log('✅ Set driver location to pickup as fallback:', pickupFallback);
+          }
+        }
+      }
+      
+      console.log('🏁 Driver info loading completed');
     } catch (error) {
       console.error('❌ Failed to load driver info:', error);
+      
+      // Log more detailed error information
+      if (error instanceof Error) {
+        console.error('❌ Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      
+      // If it's an API error, log response details
+      if (error && typeof error === 'object' && 'response' in error) {
+        const apiError = error as any;
+        console.error('❌ API Error details:', {
+          status: apiError.response?.status,
+          statusText: apiError.response?.statusText,
+          data: apiError.response?.data,
+          url: apiError.config?.url,
+          method: apiError.config?.method
+        });
+      }
     }
-  }, []);
+  }, [driverAccepted, currentRide, driverInfo, driverLocation]);
 
   // Function to update user location on server
   const updateUserLocationOnServer = useCallback(async (location: Location) => {
@@ -72,23 +220,45 @@ const RiderDashboard: React.FC = () => {
     try {
       // Check if user is authenticated and has required data
       if (!isAuthenticated || !user?.id) {
+        console.log('🚫 Cannot update location: User not authenticated or missing ID');
+        console.log('🔍 Debug - isAuthenticated:', isAuthenticated, 'user:', user);
         return;
       }
+
+      console.log('👤 Current user from context:', user);
+      console.log('🆔 Using user ID for location update:', user.id);
 
       // Prepare location data with userId and additional fields
       const locationData = {
         ...location,
         userId: user.id,
         address: location.address || '',
-        lastUpdated: new Date().toISOString(),
-        isOnline: true
       };
 
+      console.log('📍 Updating user location on server:', locationData);
+
       // Use the existing locationAPI service
-      await locationAPI.updateLocation(locationData);
+      const result = await locationAPI.updateLocation(locationData);
+      console.log('✅ Location update successful:', result);
       
-    } catch {
-      // Silently handle location update errors
+    } catch (error: any) {
+      console.error('❌ Failed to update location on server:', error);
+      if (error.response) {
+        console.error('🔍 Error details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          url: error.config?.url
+        });
+        
+        // Check if it's a user registration issue
+        if (error.response.data?.message?.includes('does not exist')) {
+          console.error('🚨 User registration issue detected. Token may be invalid.');
+          alert('Your account is not properly registered. Please log out and register again.');
+          // Could also redirect to login/register page here
+        }
+      }
+      // Silently handle other location update errors - don't show user error for network issues
     }
   }, [isAuthenticated, user]);
 
@@ -186,33 +356,29 @@ const RiderDashboard: React.FC = () => {
           case 'DRIVER_EN_ROUTE':
           case 'ARRIVED':
           case 'IN_PROGRESS':
+            console.log('✅ Driver accepted ride! Status:', ride.status, 'Driver ID:', ride.driverId);
             setWaitingForDriver(false);
             setDriverAccepted(true);
             setBookingStatus('success');
             
-            // Load driver information and location when ride is accepted
-            if (ride.driverId && (!driverInfo || driverInfo.id !== ride.driverId)) {
+            // Always load driver information and location when ride is accepted
+            if (ride.driverId) {
+              console.log('🔄 Loading driver info for driver:', ride.driverId);
               loadDriverInfo(ride.driverId);
+            } else {
+              console.log('⚠️ No driver ID available');
             }
             break;
           case 'COMPLETED':
-            // Reset states for completed ride
-            setWaitingForDriver(false);
-            setDriverAccepted(false);
-            setBookingStatus('idle');
-            setCurrentRide(null);
-            setDriverLocation(null);
-            setDriverInfo(null);
+            // Reset all states for completed ride
+            console.log('🏁 Ride completed, refreshing all fields');
+            clearAllDashboardFields();
+            console.log('✅ All dashboard fields refreshed after ride completion');
             break;
           case 'CANCELLED':
             // Handle cancellation by driver
             console.log('❌ Ride was cancelled by driver');
-            setWaitingForDriver(false);
-            setDriverAccepted(false);
-            setBookingStatus('idle'); // Set to idle instead of error
-            setCurrentRide(null);
-            setDriverLocation(null);
-            setDriverInfo(null);
+            clearAllDashboardFields();
             
             // Show specific cancellation notification
             setCancellationNotification({
@@ -246,32 +412,45 @@ const RiderDashboard: React.FC = () => {
 
   useEffect(() => {
     loadCurrentRide();
+    
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('Notification permission:', permission);
+      });
+    }
   }, [displayLocation, loadCurrentRide]);
 
   // Add polling for ride status updates
   useEffect(() => {
-    let pollInterval: number;
-    
-    // Only poll when we have a current ride or are waiting for a driver
-    if (currentRide || waitingForDriver) {
+    let pollInterval: number | undefined;
+    // Prefer SSE; only fallback poll if no current ride id yet but waiting
+    if (!currentRide?.id && waitingForDriver) {
       pollInterval = window.setInterval(() => {
         loadCurrentRide();
-      }, 3000); // Poll every 3 seconds
-      
-      console.log('🔄 Started polling ride status every 3 seconds');
+      }, 4000);
+      console.log('🔄 Fallback polling ride status (SSE active for live updates)');
     }
-    
     return () => {
       if (pollInterval) {
         clearInterval(pollInterval);
-        console.log('🛑 Stopped polling ride status');
+        console.log('🛑 Stopped fallback polling');
       }
     };
-  }, [currentRide, waitingForDriver, loadCurrentRide]);
+  }, [currentRide?.id, waitingForDriver, loadCurrentRide]);
 
   // Add polling for driver location when ride is accepted
   useEffect(() => {
     let driverLocationPoll: number;
+    
+    console.log('🔍 Driver location polling check:', {
+      currentRide: !!currentRide,
+      driverAccepted,
+      driverId: currentRide?.driverId,
+      status: currentRide?.status,
+      shouldPoll: currentRide && driverAccepted && currentRide.driverId && 
+        ['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED'].includes(currentRide.status)
+    });
     
     // Poll driver location when ride is accepted and we have driver info
     if (currentRide && driverAccepted && currentRide.driverId && 
@@ -279,7 +458,10 @@ const RiderDashboard: React.FC = () => {
       
       const pollDriverLocation = async () => {
         try {
+          console.log('🚗 Fetching driver location for ID:', currentRide.driverId);
           const locationResponse = await locationAPI.getRealTimeLocation(currentRide.driverId.toString());
+          console.log('📡 Driver location response:', locationResponse);
+          
           if (locationResponse && locationResponse.latitude && locationResponse.longitude) {
             const newDriverLocation: Location = {
               lat: locationResponse.latitude,
@@ -288,6 +470,24 @@ const RiderDashboard: React.FC = () => {
             };
             setDriverLocation(newDriverLocation);
             console.log('📍 Updated driver location:', newDriverLocation);
+          } else {
+            console.log('⚠️ No valid driver location data received');
+            
+            // Fallback: Try to get driver info which might have location
+            try {
+              const driverResponse = await userAPI.getUserById(currentRide.driverId);
+              if (driverResponse.success && driverResponse.data?.currentLocation) {
+                const fallbackLocation: Location = {
+                  lat: driverResponse.data.currentLocation.lat,
+                  lng: driverResponse.data.currentLocation.lng,
+                  address: driverResponse.data.currentLocation.address || 'Driver location (fallback)'
+                };
+                setDriverLocation(fallbackLocation);
+                console.log('📍 Using fallback driver location:', fallbackLocation);
+              }
+            } catch (fallbackError) {
+              console.log('⚠️ Fallback location fetch also failed:', fallbackError);
+            }
           }
         } catch (error) {
           console.error('❌ Failed to fetch driver location:', error);
@@ -295,6 +495,7 @@ const RiderDashboard: React.FC = () => {
       };
       
       // Poll immediately then every 5 seconds
+      console.log('🚗 Starting driver location polling');
       pollDriverLocation();
       driverLocationPoll = window.setInterval(pollDriverLocation, 5000);
       
@@ -308,6 +509,65 @@ const RiderDashboard: React.FC = () => {
       }
     };
   }, [currentRide, driverAccepted]);
+
+  // SSE subscription for ride events
+  useEffect(() => {
+    if (!currentRide?.id) return;
+    const unsubscribe = subscribeRideEvents(currentRide.id, (ev: RideEvt) => {
+      console.log('📨 Received SSE event:', ev);
+      
+      if (ev.type === 'DRIVER_LOCATION' && ev.lat && ev.lng) {
+        setDriverLocation({ lat: ev.lat, lng: ev.lng, address: 'Driver location' });
+        console.log('📍 Updated driver location via SSE:', { lat: ev.lat, lng: ev.lng });
+      }
+      
+      if (ev.type === 'STATUS' && ev.status) {
+        console.log('🔄 Status change via SSE:', ev.status);
+        const wasWaitingForDriver = waitingForDriver;
+        setCurrentRide(prev => prev ? { ...prev, status: ev.status!, updatedAt: new Date().toISOString() } : prev);
+        setWaitingForDriver(ev.status === 'PENDING');
+        
+        // Load driver info when status changes to ACCEPTED
+        if (ev.status === 'ACCEPTED' && currentRide.driverId) {
+          console.log('✅ Ride accepted via SSE, loading driver info for:', currentRide.driverId);
+          loadDriverInfo(currentRide.driverId);
+        }
+        
+        // Show notification when driver accepts the ride
+        if (wasWaitingForDriver && ev.status === 'ACCEPTED') {
+          // Show browser notification if available
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Driver Found!', {
+              body: 'A driver has accepted your ride and is on the way!',
+              icon: '/favicon.ico'
+            });
+          }
+          console.log('🎉 Driver accepted the ride!');
+        }
+        
+        // Handle ride completion via SSE
+        if (ev.status === 'COMPLETED') {
+          console.log('🏁 Ride completed via SSE, refreshing all fields');
+          
+          // Clear all dashboard fields
+          clearAllDashboardFields();
+          
+          // Show completion notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Ride Completed!', {
+              body: 'Your ride has been completed. Thank you for using our service!',
+              icon: '/favicon.ico'
+            });
+          }
+          
+          console.log('✅ All dashboard fields refreshed after ride completion via SSE');
+        }
+        
+        setDriverAccepted(['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(ev.status));
+      }
+    });
+    return () => unsubscribe();
+  }, [currentRide?.id, loadDriverInfo, waitingForDriver]);
 
   const handleBookingNow = async () => {
     if (!displayLocation || !destinationLocation) return;
@@ -443,7 +703,9 @@ const RiderDashboard: React.FC = () => {
     }
   };
 
-  const handleLocationSelect = async (location: Location, isPickupMode?: boolean) => {
+  const handleLocationSelect = useCallback(async (location: Location, isPickupMode?: boolean) => {
+    console.log('🎯 Map location selected:', location, 'isPickupMode:', isPickupMode, 'pickupFieldMode:', pickupFieldMode);
+    
     // Use the passed parameter or fallback to state
     const currentMode = isPickupMode !== undefined ? isPickupMode : pickupFieldMode;
     
@@ -462,6 +724,8 @@ const RiderDashboard: React.FC = () => {
       return;
     }
     
+    console.log(`📍 Setting ${currentMode ? 'pickup' : 'destination'} location:`, location.address);
+    
     if (currentMode) {
       // Handle pickup selection
       setPickupLocation(location);
@@ -479,33 +743,40 @@ const RiderDashboard: React.FC = () => {
     const toLocation = currentMode ? destinationLocation : location;
     
     if (fromLocation && toLocation) {
+      console.log('🛣️ Calculating route from', fromLocation.address, 'to', toLocation.address);
       await calculateRoute(fromLocation, toLocation);
     }
-  };
+  }, [pickupFieldMode, pickupLocation, destinationLocation, displayLocation]);
 
   // Handle map picking mode toggle for pickup
-  const handlePickupMapToggle = () => {
+  const handlePickupMapToggle = useCallback(() => {
+    console.log('🎯 Pickup map toggle clicked, current state:', { isMapPickingMode, pickupFieldMode });
     if (isMapPickingMode && pickupFieldMode) {
       // Exit picking mode if already in pickup mode
+      console.log('🚫 Exiting pickup map picking mode');
       setIsMapPickingMode(false);
     } else {
       // Enter pickup picking mode
+      console.log('✅ Entering pickup map picking mode');
       setPickupFieldMode(true);
       setIsMapPickingMode(true);
     }
-  };
+  }, [isMapPickingMode, pickupFieldMode]);
 
   // Handle map picking mode toggle for destination
-  const handleDestinationMapToggle = () => {
+  const handleDestinationMapToggle = useCallback(() => {
+    console.log('🎯 Destination map toggle clicked, current state:', { isMapPickingMode, pickupFieldMode });
     if (isMapPickingMode && !pickupFieldMode) {
       // Exit picking mode if already in destination mode
+      console.log('🚫 Exiting destination map picking mode');
       setIsMapPickingMode(false);
     } else {
       // Enter destination picking mode
+      console.log('✅ Entering destination map picking mode');
       setPickupFieldMode(false);
       setIsMapPickingMode(true);
     }
-  };
+  }, [isMapPickingMode, pickupFieldMode]);
 
   // Handle clear pickup
   const handleClearPickup = () => {
@@ -521,7 +792,10 @@ const RiderDashboard: React.FC = () => {
       setEstimatedDistance('');
     }
     
-    setIsMapPickingMode(false);
+    // Only exit map picking mode if we're currently picking pickup
+    if (isMapPickingMode && pickupFieldMode) {
+      setIsMapPickingMode(false);
+    }
   };
 
   // Handle clear destination
@@ -530,7 +804,11 @@ const RiderDashboard: React.FC = () => {
     setDestination('');
     setEstimatedDuration('');
     setEstimatedDistance('');
-    setIsMapPickingMode(false);
+    
+    // Only exit map picking mode if we're currently picking destination
+    if (isMapPickingMode && !pickupFieldMode) {
+      setIsMapPickingMode(false);
+    }
   };
 
   return (
@@ -570,77 +848,40 @@ const RiderDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Driver Information Panel */}
-      {driverAccepted && currentRide && driverInfo && (
-        <div className="absolute top-20 left-4 right-4 z-40">
-          <div className="bg-white rounded-lg p-4 shadow-lg border-l-4 border-green-400">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-lg">🚖</span>
-                </div>
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-gray-900">
-                  Your Driver is Coming!
-                </h3>
-                <div className="mt-2 text-sm text-gray-600">
-                  <p className="font-medium">{driverInfo.username}</p>
-                  <p className="text-xs">{driverInfo.phone}</p>
-                  {currentRide.status === 'ACCEPTED' && (
-                    <p className="text-blue-600 mt-1">
-                      🚗 Driver is on the way to pick you up
-                      {driverLocation && displayLocation && (
-                        <span className="block text-xs">
-                          {LocationService.calculateDistance(driverLocation, pickupLocation || displayLocation).toFixed(1)} km away
-                        </span>
-                      )}
-                    </p>
-                  )}
-                  {currentRide.status === 'DRIVER_EN_ROUTE' && (
-                    <p className="text-blue-600 mt-1">
-                      🚗 Driver is approaching your location
-                      {driverLocation && displayLocation && (
-                        <span className="block text-xs">
-                          {LocationService.calculateDistance(driverLocation, pickupLocation || displayLocation).toFixed(1)} km away
-                        </span>
-                      )}
-                    </p>
-                  )}
-                  {currentRide.status === 'ARRIVED' && (
-                    <p className="text-green-600 mt-1">✅ Driver has arrived at pickup location</p>
-                  )}
-                  {currentRide.status === 'IN_PROGRESS' && (
-                    <p className="text-purple-600 mt-1">🛣️ Ride in progress to destination</p>
-                  )}
-                </div>
-              </div>
-              {driverLocation && (
-                <div className="ml-4 text-right">
-                  <div className="text-xs text-gray-500">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mb-1"></div>
-                    Live Location
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       
       <div className="flex-1 relative overflow-hidden map-full-height">
         {displayLocation ? (
           <OpenStreetMap
-            key={`${displayLocation.lat}-${displayLocation.lng}-${pickupLocation?.lat || 'none'}-${pickupLocation?.lng || 'none'}-${destinationLocation?.lat || 'none'}-${destinationLocation?.lng || 'none'}-${isMapPickingMode}-${driverLocation?.lat || 'none'}`}
+            routeKey={
+              isMapPickingMode 
+                ? `picking-${pickupFieldMode ? 'pickup' : 'destination'}` // Stable key during picking
+                : `${pickupLocation?.lat || 'p0'}-${pickupLocation?.lng || 'p1'}-${destinationLocation?.lat || 'd0'}-${destinationLocation?.lng || 'd1'}-${driverLocation?.lat || 'dl0'}-${driverLocation?.lng || 'dl1'}-${waitingForDriver}-${driverAccepted}`
+            }
             center={waitingForDriver || driverAccepted ? (pickupLocation || displayLocation) : displayLocation} // Center on pickup during booking
             zoom={waitingForDriver || driverAccepted ? 17 : 15} // Zoom in during booking
             height="100%"
-            markers={[
-              displayLocation,
-              ...(pickupLocation ? [pickupLocation] : []),
-              ...(destinationLocation ? [destinationLocation] : [])
-            ]}
+            markers={(() => {
+              // Debug markers
+              const markers = [
+                displayLocation,
+                ...(pickupLocation ? [pickupLocation] : []),
+                ...(destinationLocation ? [destinationLocation] : []),
+                ...(driverLocation && driverAccepted ? [{ 
+                  ...driverLocation, 
+                  address: `Driver - ${driverInfo?.username || 'Your Driver'}` 
+                }] : [])
+              ];
+              
+              console.log('🗺️ Map markers:', {
+                total: markers.length,
+                driverLocation,
+                driverAccepted,
+                hasDriverMarker: !!(driverLocation && driverAccepted),
+                markers
+              });
+              
+              return markers;
+            })()}
             showDirections={
               driverAccepted && driverLocation ? 
                 true : // Show route from driver to pickup when driver is coming
@@ -648,12 +889,12 @@ const RiderDashboard: React.FC = () => {
             }
             destination={
               driverAccepted && driverLocation ? 
-                (pickupLocation || displayLocation) : // Route to pickup when driver is coming  
+                (currentRide?.status === 'IN_PROGRESS' ? (destinationLocation || undefined) : (pickupLocation || displayLocation || undefined)) : // Route to destination if in progress, pickup otherwise
                 (destinationLocation || undefined) // Original destination when no driver
             }
             pickup={
               driverAccepted && driverLocation ? 
-                driverLocation : // Start route from driver location when driver is coming
+                (currentRide?.status === 'IN_PROGRESS' ? (pickupLocation || displayLocation) : driverLocation) : // Start from pickup if in progress, driver location otherwise
                 (pickupLocation || displayLocation) // Original pickup/current location when no driver
             }
             routingService="ors"
@@ -774,6 +1015,59 @@ const RiderDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Debug Info for Map Picking Mode */}
+        {import.meta.env.DEV && (
+          <div className="fixed bottom-4 right-8 z-50 bg-black bg-opacity-75 text-white p-2 rounded text-xs">
+            <div>Map Picking: {isMapPickingMode ? 'ON' : 'OFF'}</div>
+            <div>Mode: {pickupFieldMode ? 'PICKUP' : 'DESTINATION'}</div>
+            <div>onLocationSelect: {isMapPickingMode ? 'ENABLED' : 'DISABLED'}</div>
+            <div>Display Location: {displayLocation ? '✅' : '❌'}</div>
+            <div>Route Key: {isMapPickingMode ? 'STABLE' : 'DYNAMIC'}</div>
+            <div>Driver Accepted: {driverAccepted ? '✅' : '❌'}</div>
+            <div>Driver Info: {driverInfo ? '✅' : '❌'}</div>
+            <div>Driver Location: {driverLocation ? '✅' : '❌'}</div>
+            <div>Current Ride ID: {currentRide?.id || 'N/A'}</div>
+            <div>Driver ID: {currentRide?.driverId || 'N/A'}</div>
+            {/* Manual test button */}
+            {currentRide?.driverId && (
+              <div className="mt-1 space-y-1">
+                <button
+                  onClick={() => {
+                    console.log('🧪 Manual test: Loading driver info for ID:', currentRide.driverId);
+                    loadDriverInfo(currentRide.driverId);
+                  }}
+                  className="block w-full px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                >
+                  Test Load Driver
+                </button>
+                <button
+                  onClick={async () => {
+                    console.log('🧪 Manual test: Direct location API call for ID:', currentRide.driverId);
+                    try {
+                      const locationResponse = await locationAPI.getRealTimeLocation(currentRide.driverId.toString());
+                      console.log('🧪 Direct location result:', locationResponse);
+                    } catch (error) {
+                      console.error('🧪 Direct location error:', error);
+                    }
+                  }}
+                  className="block w-full px-2 py-1 bg-green-600 text-white rounded text-xs"
+                >
+                  Test Location API
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('🧪 Manual test: Clearing all dashboard fields');
+                    clearAllDashboardFields();
+                  }}
+                  className="block w-full px-2 py-1 bg-red-600 text-white rounded text-xs"
+                >
+                  Test Clear All Fields
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Bottom Panel */}
         <div className={`map-overlay-bottom pb-safe zoom-stable 
                         fixed bottom-0 left-0 right-0 overflow-y-auto
@@ -809,8 +1103,9 @@ const RiderDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Pickup Location Input */}
-                <div className={`${waitingForDriver || driverAccepted ? 'mb-2 hidden md:block' : 'mb-3'}`}>
+                {/* Pickup Location Input - Hidden when driver arrives or ride in progress */}
+                {(!driverAccepted || !currentRide || !['ARRIVED', 'IN_PROGRESS'].includes(currentRide.status)) && (
+                <div className="mb-3">
                   <div className="flex items-center space-x-2 mb-1">
                     <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
                     <span className="text-xs md:text-sm font-bold text-gray-900">Pickup Location</span>
@@ -867,9 +1162,13 @@ const RiderDashboard: React.FC = () => {
                     </div>
                   )}
                 </div>
+              )}
 
+              {/* Destination Input - Hide during active ride */}
+              {currentRide?.status !== 'ARRIVED' && currentRide?.status !== 'IN_PROGRESS' && (
+                <div>
                 {/* Destination Input */}
-                <div className={`${waitingForDriver || driverAccepted ? 'mb-2 hidden md:block' : 'mb-3'}`}>
+                <div className="mb-3">
                   <div className="flex items-center space-x-2 mb-1">
                     <div className="w-2 h-2 bg-red-500 rounded-sm rotate-45 flex-shrink-0 ml-1"></div>
                     <span className="text-xs md:text-sm font-bold text-gray-900">Destination</span>
@@ -934,9 +1233,121 @@ const RiderDashboard: React.FC = () => {
                     </div>
                   )}
                 </div>
+                </div>
+              )}
 
-                {/* Waiting for Driver Status */}
-                {(waitingForDriver || driverAccepted) && (
+              {/* Driver Information Panel - Moved inside bottom panel */}
+                {driverAccepted && currentRide && (
+                  <div className="mb-3 bg-green-50 rounded-lg p-3 border-2 border-green-200">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm">🚖</span>
+                        </div>
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <h3 className="text-sm font-medium text-green-900">
+                          {driverInfo ? 'Your Driver is Coming!' : 'Driver Accepted!'}
+                        </h3>
+                        
+                        {/* Debug info in development */}
+                        {import.meta.env.DEV && (
+                          <div className="mt-1 text-xs text-green-600 border-t border-green-300 pt-1">
+                            <div>Driver ID: {currentRide.driverId}</div>
+                            <div>Has Driver Info: {driverInfo ? 'Yes' : 'No'}</div>
+                            <div>Has Driver Location: {driverLocation ? 'Yes' : 'No'}</div>
+                            <div>Status: {currentRide.status}</div>
+                          </div>
+                        )}
+                        
+                        {driverInfo ? (
+                          <div className="mt-2 text-sm text-green-700">
+                            <p className="font-medium">{driverInfo.username}</p>
+                            <p className="text-xs">{driverInfo.phone}</p>
+                            {currentRide.status === 'ACCEPTED' && (
+                              <p className="text-green-600 mt-1">
+                                🚗 Driver is on the way to pick you up
+                                {driverLocation && displayLocation && (
+                                  <span className="block text-xs">
+                                    {LocationService.calculateDistance(driverLocation, pickupLocation || displayLocation).toFixed(1)} km away
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                            {currentRide.status === 'DRIVER_EN_ROUTE' && (
+                              <p className="text-green-600 mt-1">
+                                🚗 Driver is approaching your location
+                                {driverLocation && displayLocation && (
+                                  <span className="block text-xs">
+                                    {LocationService.calculateDistance(driverLocation, pickupLocation || displayLocation).toFixed(1)} km away
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                            {currentRide.status === 'ARRIVED' && (
+                              <div className="mt-1">
+                                <p className="text-green-600 font-medium">✅ Driver has arrived at pickup location</p>
+                                <p className="text-xs text-green-500 mt-1">Your driver is waiting for you</p>
+                                {driverLocation && (
+                                  <p className="text-xs text-green-600 mt-1">
+                                    📍 Driver location: {driverLocation.address || 'At pickup point'}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {currentRide.status === 'IN_PROGRESS' && (
+                              <div className="mt-1">
+                                <p className="text-purple-600 font-medium">🛣️ Ride in progress to destination</p>
+                                <p className="text-xs text-purple-500 mt-1">Enjoy your ride!</p>
+                                {driverLocation && destinationLocation && (
+                                  <p className="text-xs text-purple-600 mt-1">
+                                    📍 {LocationService.calculateDistance(driverLocation, destinationLocation).toFixed(1)} km to destination
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-sm text-green-700">
+                            <p className="text-green-600">Loading driver information...</p>
+                            <p className="text-xs text-green-500 mt-1">
+                              Fetching driver details for ID: {currentRide.driverId}
+                            </p>
+                            <button
+                              onClick={() => {
+                                console.log('🔄 Manual refresh triggered for driver ID:', currentRide.driverId);
+                                currentRide.driverId && loadDriverInfo(currentRide.driverId);
+                              }}
+                              className="text-xs text-green-600 hover:text-green-800 underline mt-1"
+                            >
+                              Refresh driver info
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {driverLocation ? (
+                        <div className="ml-4 text-right">
+                          <div className="text-xs text-green-600">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mb-1"></div>
+                            Live Location
+                          </div>
+                        </div>
+                      ) : driverInfo ? (
+                        <div className="ml-4 text-right">
+                          <button
+                            onClick={() => currentRide.driverId && loadDriverInfo(currentRide.driverId)}
+                            className="text-xs text-green-600 hover:text-green-800 underline"
+                          >
+                            Get location
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+
+                {/* Waiting for Driver Status - Hide during active ride */}
+                {(waitingForDriver || driverAccepted) && currentRide?.status !== 'ARRIVED' && currentRide?.status !== 'IN_PROGRESS' && (
                   <div className="bg-orange-50 rounded-lg p-2 md:p-3 mb-2 border-2 border-orange-200">
                     <div className="flex items-center justify-center space-x-2 text-orange-800 mb-2">
                       <div className="animate-pulse">
@@ -964,7 +1375,7 @@ const RiderDashboard: React.FC = () => {
 
                 {/* Route Info */}
                 {displayLocation && destinationLocation && (
-                  <div className={`bg-blue-50 rounded-lg p-2 md:p-3 ${waitingForDriver || driverAccepted ? 'mb-2 hidden md:block' : 'mb-3'}`}>
+                  <div className="bg-blue-50 rounded-lg p-2 md:p-3 mb-3">
                     <div className="flex justify-between items-center text-xs md:text-sm">
                       <div className="flex items-center space-x-1 md:space-x-2">
                         <Clock className="h-3 w-3 md:h-4 md:w-4 text-blue-600" />
@@ -982,8 +1393,8 @@ const RiderDashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* Booking Button */}
-                {!waitingForDriver && !driverAccepted && (
+                {/* Booking Button - Hide during active ride */}
+                {!waitingForDriver && !driverAccepted && currentRide?.status !== 'ARRIVED' && currentRide?.status !== 'IN_PROGRESS' && (
                   <button
                     onClick={handleBookingNow}
                     disabled={!destinationLocation || !displayLocation || bookingStatus === 'booking'}

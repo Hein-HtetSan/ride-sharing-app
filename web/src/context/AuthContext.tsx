@@ -30,19 +30,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     console.log('🔍 AuthContext: Checking stored authentication...');
     const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('authToken');
+    const storedToken = localStorage.getItem('token'); // Also check for 'token' key
+    const storedAuthToken = localStorage.getItem('authToken');
     
     console.log('📦 Stored user:', storedUser);
     console.log('🔑 Stored token:', storedToken ? 'Token exists' : 'No token');
+    console.log('🔑 Stored authToken:', storedAuthToken ? 'AuthToken exists' : 'No authToken');
     
-    if (storedUser && storedToken) {
+    const actualToken = storedToken || storedAuthToken;
+    
+    if (storedUser && actualToken) {
       try {
         const parsedUser = JSON.parse(storedUser);
         console.log('✅ Restoring user from localStorage:', parsedUser);
+        console.log('👤 User ID being used:', parsedUser.id);
+        console.log('👤 User details:', {
+          id: parsedUser.id,
+          username: parsedUser.username,
+          phone: parsedUser.phone,
+          userType: parsedUser.userType
+        });
         setUser(parsedUser);
       } catch (error) {
         console.error('❌ Error parsing stored user data:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
         localStorage.removeItem('authToken');
       }
     } else {

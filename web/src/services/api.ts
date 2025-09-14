@@ -186,20 +186,32 @@ export const rideAPI = {
 export const locationAPI = {
   updateLocation: async (location: Location & { userId: number }) => {
     const payload = {
-      latitude: location.lat,  // Map lat to latitude
-      longitude: location.lng, // Map lng to longitude
+      latitude: location.lat,
+      longitude: location.lng,
       address: location.address || '',
       is_online: true
-      // Don't send user_id or last_updated as they are handled by the backend
+      // last_updated will be set automatically by the backend
     };
+    
+    console.log('📡 Sending location update payload:', payload);
     
     const response = await api.put(`/users/update/location?userId=${location.userId}`, payload);
     return response.data;
   },
 
   getRealTimeLocation: async (userId: string) => {
+    console.log('🔍 API: Fetching location for user:', userId);
     const response = await api.get(`/users/${userId}/get/location`);
-    return response.data;
+    console.log('🔍 API: Raw location response:', response.data);
+    
+    // The backend returns ApiResponse with success/data structure
+    if (response.data && response.data.success && response.data.data) {
+      console.log('🔍 API: Extracted location data:', response.data.data);
+      return response.data.data; // Return the actual location data
+    } else {
+      console.warn('🔍 API: Location response format unexpected:', response.data);
+      return response.data; // Return as-is for backward compatibility
+    }
   },
 };
 

@@ -1,6 +1,9 @@
 package com.rsrmi.api.controller;
 
 import com.rsrmi.api.model.Ride;
+import com.rsrmi.api.events.RideEvent;
+import com.rsrmi.api.events.RideEventService;
+import com.rsrmi.api.events.RideEventType;
 import com.rsrmi.api.service.RideServiceRmiClient;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +38,9 @@ public class RideController {
 
     @Autowired
     private RideServiceRmiClient rideServiceRmiClient;
+
+    @Autowired
+    private RideEventService rideEventService;
 
     @Operation(
         summary = "Get Current Active Ride",
@@ -104,6 +110,10 @@ public class RideController {
             int rideId = rideServiceRmiClient.requestRide(riderId, pickupLat, pickupLng, destLat, destLng);
             
             if (rideId > 0) {
+                // broadcast new ride requested (status PENDING)
+                RideEvent event = new RideEvent((long) rideId, RideEventType.STATUS);
+                event.setStatus("PENDING");
+                rideEventService.publish(event);
                 Map<String, Object> response = new HashMap<>();
                 response.put("success", true);
                 response.put("message", "Ride requested successfully");
@@ -156,6 +166,10 @@ public class RideController {
             int result = rideServiceRmiClient.acceptRide(driverId, rideId);
             
             if (result > 0) {
+                // broadcast ride accepted
+                RideEvent event = new RideEvent((long) rideId, RideEventType.STATUS);
+                event.setStatus("ACCEPTED");
+                rideEventService.publish(event);
                 Map<String, Object> response = new HashMap<>();
                 response.put("rideId", rideId);
                 response.put("driverId", driverId);
@@ -231,6 +245,19 @@ public class RideController {
             }
             
             if (success) {
+                // broadcast status change
+                String statusValue;
+                switch (action.toLowerCase()) {
+                    case "start_drive_to_pickup": statusValue = "DRIVER_EN_ROUTE"; break;
+                    case "arrived_at_pickup": statusValue = "ARRIVED"; break;
+                    case "start_ride": statusValue = "IN_PROGRESS"; break;
+                    case "complete": statusValue = "COMPLETED"; break;
+                    case "cancel": statusValue = "CANCELLED"; break;
+                    default: statusValue = action.toUpperCase();
+                }
+                RideEvent event = new RideEvent((long) rideId, RideEventType.STATUS);
+                event.setStatus(statusValue);
+                rideEventService.publish(event);
                 Map<String, Object> response = new HashMap<>();
                 response.put("rideId", rideId);
                 response.put("action", action);
@@ -420,6 +447,21 @@ public class RideController {
             
             boolean success = rideServiceRmiClient.updateDriverLocation(driverId, lat, lng);
             if (success) {
+                // Broadcast driver location update to the active ride stream (if any)
+                try {
+                    Ride currentRide = rideServiceRmiClient.getCurrentRide(driverId);
+                    if (currentRide != null) {
+                        Ride.Status st = currentRide.getStatus();
+                        if (st != Ride.Status.COMPLETED && st != Ride.Status.CANCELLED) {
+                            RideEvent event = new RideEvent((long) currentRide.getId(), RideEventType.DRIVER_LOCATION);
+                            event.setLat(lat);
+                            event.setLng(lng);
+                            rideEventService.publish(event);
+                        }
+                    }
+                } catch (Exception ignore) {
+                    // Non-blocking: location updated even if event emission fails
+                }
                 Map<String, Object> response = new HashMap<>();
                 response.put("driverId", driverId);
                 response.put("latitude", lat);
