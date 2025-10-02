@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navigation, Clock, Map, MapPin, Route, X } from 'lucide-react';
 import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -12,6 +12,8 @@ import { subscribeRideEvents, RideEvent as RideEvt } from '../../services/events
 
 
 const RiderDashboard: React.FC = () => {
+  // Track previous ride status for fallback completion detection
+  const previousRideStatusRef = useRef<string | null>(null);
   const [destination, setDestination] = useState('');
   const [pickup, setPickup] = useState('');
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
@@ -33,14 +35,15 @@ const RiderDashboard: React.FC = () => {
   }>({ show: false, message: '', type: 'other' });
   const [driverLocation, setDriverLocation] = useState<Location | null>(null);
   const [driverInfo, setDriverInfo] = useState<Driver | null>(null);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
 
 
   const { currentLocation, requestDirectGPS } = useLocation();
   const { user, isAuthenticated } = useAuth();
 
-  // Centralized function to clear all dashboard fields
-  const clearAllDashboardFields = useCallback(() => {
-    console.log('🧹 Clearing all dashboard fields');
+  // Function to clear ride-related fields without touching popups
+  const clearRideFields = useCallback(() => {
+    console.log('🧹 Clearing ride-related fields only');
     
     // Clear ride-related states
     setWaitingForDriver(false);
@@ -62,6 +65,16 @@ const RiderDashboard: React.FC = () => {
     setIsMapPickingMode(false);
     setPickupFieldMode(false);
     
+    console.log('✅ Ride fields cleared');
+  }, []);
+
+  // Centralized function to clear all dashboard fields
+  const clearAllDashboardFields = useCallback(() => {
+    console.log('🧹 Clearing all dashboard fields');
+    
+    // Clear ride fields first
+    clearRideFields();
+    
     // Clear any notifications
     setCancellationNotification({
       show: false,
@@ -69,8 +82,11 @@ const RiderDashboard: React.FC = () => {
       type: 'other'
     });
     
+    // Clear completion popup
+    setShowCompletionPopup(false);
+    
     console.log('✅ All dashboard fields cleared');
-  }, []);
+  }, [clearRideFields]);
 
   // Function to load driver information and location
   const loadDriverInfo = useCallback(async (driverId: number) => {
@@ -370,11 +386,29 @@ const RiderDashboard: React.FC = () => {
             }
             break;
           case 'COMPLETED':
-            // Reset all states for completed ride
-            console.log('🏁 Ride completed, refreshing all fields');
-            clearAllDashboardFields();
-            console.log('✅ All dashboard fields refreshed after ride completion');
-            break;
+            // NEVER set a completed ride in state to prevent API calls
+            console.log('🏁 Ride completed - immediately clearing all state and showing popup');
+            console.log('🔍 Ride ID that completed:', ride.id);
+            
+            // Immediately clear all ride-related state to stop all polling/routing
+            setCurrentRide(null);
+            setDriverAccepted(false);
+            setDriverLocation(null);
+            setWaitingForDriver(false);
+            setBookingStatus('idle');
+            
+            // Clear all location and route fields to stop routing
+            setPickupLocation(null);
+            setDestinationLocation(null);
+            setPickup('');
+            setDestination('');
+            setEstimatedDuration('');
+            setEstimatedDistance('');
+            
+            // Show completion popup
+            setShowCompletionPopup(true);
+            console.log('🎉 Completion popup shown, all state cleared');
+            return; // Exit early to prevent setting currentRide
           case 'CANCELLED':
             // Handle cancellation by driver
             console.log('❌ Ride was cancelled by driver');
@@ -421,6 +455,24 @@ const RiderDashboard: React.FC = () => {
     }
   }, [displayLocation, loadCurrentRide]);
 
+  // Fallback completion detection: track last non-null status
+  useEffect(() => {
+    if (currentRide?.status) {
+      previousRideStatusRef.current = currentRide.status;
+    }
+  }, [currentRide?.status]);
+
+  useEffect(() => {
+    if (previousRideStatusRef.current === 'IN_PROGRESS' && !currentRide) {
+      console.log('🏁 Fallback: Ride assumed completed (IN_PROGRESS ride disappeared). Clearing fields and showing completion popup.');
+      // Clear all ride-related and route/input fields
+      clearRideFields();
+      // Show completion popup after clearing
+      setShowCompletionPopup(true);
+      previousRideStatusRef.current = null; // reset
+    }
+  }, [currentRide, clearRideFields]);
+
   // Add polling for ride status updates
   useEffect(() => {
     let pollInterval: number | undefined;
@@ -428,8 +480,8 @@ const RiderDashboard: React.FC = () => {
     if (!currentRide?.id && waitingForDriver) {
       pollInterval = window.setInterval(() => {
         loadCurrentRide();
-      }, 4000);
-      console.log('🔄 Fallback polling ride status (SSE active for live updates)');
+      }, 10000); // Changed from 4000 to 10000 (10 seconds)
+      console.log('🔄 Fallback polling ride status every 10 seconds (SSE active for live updates)');
     }
     return () => {
       if (pollInterval) {
@@ -438,6 +490,22 @@ const RiderDashboard: React.FC = () => {
       }
     };
   }, [currentRide?.id, waitingForDriver, loadCurrentRide]);
+
+  // Additional safety polling while ride is active to catch COMPLETED if SSE missed
+  useEffect(() => {
+    if (!currentRide?.id) return;
+    const active = ['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(currentRide.status);
+    if (!active) return;
+
+    console.log('🔄 Starting safety ride-status polling every 7s during active ride');
+    const id = window.setInterval(() => {
+      loadCurrentRide();
+    }, 7000);
+    return () => {
+      clearInterval(id);
+      console.log('🛑 Stopped safety ride-status polling');
+    };
+  }, [currentRide?.id, currentRide?.status, loadCurrentRide]);
 
   // Add polling for driver location when ride is accepted
   useEffect(() => {
@@ -454,7 +522,8 @@ const RiderDashboard: React.FC = () => {
     
     // Poll driver location when ride is accepted and we have driver info
     if (currentRide && driverAccepted && currentRide.driverId && 
-        ['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED'].includes(currentRide.status)) {
+        ['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED'].includes(currentRide.status) &&
+        currentRide.status !== 'COMPLETED') {
       
       const pollDriverLocation = async () => {
         try {
@@ -494,12 +563,12 @@ const RiderDashboard: React.FC = () => {
         }
       };
       
-      // Poll immediately then every 5 seconds
+      // Poll immediately then every 10 seconds
       console.log('🚗 Starting driver location polling');
       pollDriverLocation();
-      driverLocationPoll = window.setInterval(pollDriverLocation, 5000);
+      driverLocationPoll = window.setInterval(pollDriverLocation, 10000); // Changed from 5000 to 10000
       
-      console.log('🚗 Started polling driver location every 5 seconds');
+      console.log('🚗 Started polling driver location every 10 seconds');
     }
     
     return () => {
@@ -547,10 +616,26 @@ const RiderDashboard: React.FC = () => {
         
         // Handle ride completion via SSE
         if (ev.status === 'COMPLETED') {
-          console.log('🏁 Ride completed via SSE, refreshing all fields');
+          console.log('🏁 Ride completed via SSE - immediately clearing all state and showing popup');
+          console.log('🔍 SSE Ride ID that completed:', currentRide?.id);
           
-          // Clear all dashboard fields
-          clearAllDashboardFields();
+          // Immediately clear all ride-related state to stop all polling/routing
+          setCurrentRide(null);
+          setDriverAccepted(false);
+          setDriverLocation(null);
+          setWaitingForDriver(false);
+          setBookingStatus('idle');
+          
+          // Clear all location and route fields to stop routing
+          setPickupLocation(null);
+          setDestinationLocation(null);
+          setPickup('');
+          setDestination('');
+          setEstimatedDuration('');
+          setEstimatedDistance('');
+          
+          // Show completion popup
+          setShowCompletionPopup(true);
           
           // Show completion notification
           if ('Notification' in window && Notification.permission === 'granted') {
@@ -560,7 +645,8 @@ const RiderDashboard: React.FC = () => {
             });
           }
           
-          console.log('✅ All dashboard fields refreshed after ride completion via SSE');
+          console.log('🎉 SSE Completion popup shown, all state cleared');
+          return; // Exit early to prevent further processing
         }
         
         setDriverAccepted(['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(ev.status));
@@ -568,6 +654,23 @@ const RiderDashboard: React.FC = () => {
     });
     return () => unsubscribe();
   }, [currentRide?.id, loadDriverInfo, waitingForDriver]);
+
+  // Auto-close completion popup after 10 seconds
+  useEffect(() => {
+    if (showCompletionPopup) {
+      console.log('🎉 Completion popup is now showing, starting 10-second auto-close timer');
+      const autoCloseTimer = setTimeout(() => {
+        console.log('⏰ Auto-closing completion popup after 10 seconds');
+        setShowCompletionPopup(false);
+        // Fields already cleared when popup was shown
+      }, 10000); // 10 seconds
+      
+      return () => {
+        console.log('🧹 Clearing auto-close timer');
+        clearTimeout(autoCloseTimer);
+      };
+    }
+  }, [showCompletionPopup]);
 
   const handleBookingNow = async () => {
     if (!displayLocation || !destinationLocation) return;
@@ -687,7 +790,8 @@ const RiderDashboard: React.FC = () => {
 
   const calculateRoute = async (from: Location, to: Location) => {
     try {
-      // Use RoutingService (with ORS API) for accurate routing
+      // Use RoutingService for INITIAL route calculation only
+      // Live driver tracking now uses pin updates instead of recalculating routes
       const routeResult = await RoutingService.getRoute(from, to);
       
       setEstimatedDuration(RoutingService.formatDuration(routeResult.duration));
@@ -848,6 +952,31 @@ const RiderDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Ride Completion Popup */}
+      {showCompletionPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Ride Completed!</h2>
+              <p className="text-gray-600 mb-6">
+                Thank you for using our ride sharing service. We hope you had a great journey!
+              </p>
+              <button
+                onClick={() => {
+                  console.log('🔄 User manually closed completion popup');
+                  setShowCompletionPopup(false);
+                  // Fields already cleared when popup was shown
+                }}
+                className="w-full bg-green-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-green-700 transition-colors duration-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       
       <div className="flex-1 relative overflow-hidden map-full-height">
         {displayLocation ? (
@@ -855,18 +984,19 @@ const RiderDashboard: React.FC = () => {
             routeKey={
               isMapPickingMode 
                 ? `picking-${pickupFieldMode ? 'pickup' : 'destination'}` // Stable key during picking
-                : `${pickupLocation?.lat || 'p0'}-${pickupLocation?.lng || 'p1'}-${destinationLocation?.lat || 'd0'}-${destinationLocation?.lng || 'd1'}-${driverLocation?.lat || 'dl0'}-${driverLocation?.lng || 'dl1'}-${waitingForDriver}-${driverAccepted}`
+                : `${pickupLocation?.lat || 'p0'}-${pickupLocation?.lng || 'p1'}-${destinationLocation?.lat || 'd0'}-${destinationLocation?.lng || 'd1'}-${driverLocation?.lat || 'dl0'}-${driverLocation?.lng || 'dl1'}-${waitingForDriver}-${driverAccepted}-${currentRide?.status || 'idle'}`
             }
             center={waitingForDriver || driverAccepted ? (pickupLocation || displayLocation) : displayLocation} // Center on pickup during booking
             zoom={waitingForDriver || driverAccepted ? 17 : 15} // Zoom in during booking
             height="100%"
+            rideStatus={currentRide?.status}
             markers={(() => {
-              // Debug markers
+              // Normal markers logic - currentRide will be null when completed
               const markers = [
                 displayLocation,
                 ...(pickupLocation ? [pickupLocation] : []),
                 ...(destinationLocation ? [destinationLocation] : []),
-                ...(driverLocation && driverAccepted ? [{ 
+                ...(driverLocation && driverAccepted && currentRide?.status !== 'ARRIVED' ? [{ 
                   ...driverLocation, 
                   address: `Driver - ${driverInfo?.username || 'Your Driver'}` 
                 }] : [])
@@ -884,20 +1014,26 @@ const RiderDashboard: React.FC = () => {
             })()}
             showDirections={
               driverAccepted && driverLocation ? 
-                true : // Show route from driver to pickup when driver is coming
+                (currentRide?.status === 'ARRIVED' || currentRide?.status === 'IN_PROGRESS' ? 
+                  !!(pickupLocation && destinationLocation) : // Show pickup to destination route when arrived or in progress
+                  true) : // Show driver to pickup route when driver is coming
                 !!(destinationLocation && displayLocation && !waitingForDriver && !driverAccepted) // Original rider route when no driver
-            }
-            destination={
-              driverAccepted && driverLocation ? 
-                (currentRide?.status === 'IN_PROGRESS' ? (destinationLocation || undefined) : (pickupLocation || displayLocation || undefined)) : // Route to destination if in progress, pickup otherwise
-                (destinationLocation || undefined) // Original destination when no driver
             }
             pickup={
               driverAccepted && driverLocation ? 
-                (currentRide?.status === 'IN_PROGRESS' ? (pickupLocation || displayLocation) : driverLocation) : // Start from pickup if in progress, driver location otherwise
+                (currentRide?.status === 'ARRIVED' || currentRide?.status === 'IN_PROGRESS' ? 
+                  (pickupLocation || displayLocation) : // Start from pickup when arrived or in progress
+                  driverLocation) : // Start from driver location when driver is coming (FIXED: driver is pickup point)
                 (pickupLocation || displayLocation) // Original pickup/current location when no driver
             }
-            routingService="ors"
+            destination={
+              driverAccepted && driverLocation ? 
+                (currentRide?.status === 'ARRIVED' || currentRide?.status === 'IN_PROGRESS' ? 
+                  (destinationLocation || undefined) : // Show destination when arrived or in progress
+                  (pickupLocation || displayLocation || undefined)) : // Route to pickup when driver is coming (FIXED: pickup is destination)
+                (destinationLocation || undefined) // Original destination when no driver
+            }
+            routingService="osrm"
             onLocationSelect={isMapPickingMode ? handleLocationSelect : undefined}
             driverAccepted={driverAccepted} // Pass driver acceptance state for animation
             waitingForDriver={waitingForDriver} // Pass waiting state for radiating animation

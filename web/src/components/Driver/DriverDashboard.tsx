@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
-import { rideAPI, locationAPI } from '../../services/api';
+import { rideAPI } from '../../services/api';
 import { LocationService } from '../../services/locationService';
 import { AddressService } from '../../services/addressService';
 import Header from '../Layout/Header';
@@ -47,108 +47,13 @@ const DriverDashboard: React.FC = () => {
   const [showRideDetails, setShowRideDetails] = useState(false);
   const [newRideNotification, setNewRideNotification] = useState(false);
   const [routeKey, setRouteKey] = useState(`route-${Date.now()}`);
-  const [isDrivingMode, setIsDrivingMode] = useState(false);
-  const [currentInstruction, setCurrentInstruction] = useState<string>('');
-  const [distanceToNextTurn, setDistanceToNextTurn] = useState<number>(0);
-  const [nextTurnDirection, setNextTurnDirection] = useState<string>('');
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const previousRideStatusRef = useRef<string | null>(null);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
 
   const { currentLocation, requestDirectGPS } = useLocation();
   const { user, isAuthenticated } = useAuth();
 
-  // Voice synthesis for navigation
-  const speakInstruction = useCallback((text: string) => {
-    if (!voiceEnabled || !window.speechSynthesis) return;
-    
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    utterance.volume = 0.8;
-    
-    // Wait for voices to load and use English voice if available
-    const setVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(voice => 
-        voice.lang.startsWith('en') && voice.localService
-      ) || voices.find(voice => voice.lang.startsWith('en'));
-      
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-      }
-      
-      window.speechSynthesis.speak(utterance);
-      console.log('🔊 Voice guidance:', text);
-    };
-
-    // If voices are already loaded
-    if (window.speechSynthesis.getVoices().length > 0) {
-      setVoice();
-    } else {
-      // Wait for voices to load
-      window.speechSynthesis.onvoiceschanged = () => {
-        setVoice();
-        window.speechSynthesis.onvoiceschanged = null;
-      };
-    }
-  }, [voiceEnabled]);
-
-  // Generate navigation instructions based on route and current location
-  const generateNavigationInstruction = useCallback((currentLoc: Location, targetLat: number, targetLng: number) => {
-    const distance = calculateDistance(currentLoc.lat, currentLoc.lng, targetLat, targetLng);
-    const distanceInMeters = Math.round(distance * 1000);
-    
-    // Get destination name for instructions
-    const destinationName = currentRide?.status === 'IN_PROGRESS' 
-      ? (currentRide?.destinationAddress?.split(',')[0] || 'destination')
-      : (currentRide?.pickupAddress?.split(',')[0] || 'pickup location');
-    
-    if (distance < 0.02) { // Less than 20 meters
-      return {
-        instruction: `You have arrived at ${destinationName}`,
-        distance: 0,
-        direction: "arrived"
-      };
-    } else if (distance < 0.1) { // Less than 100 meters
-      return {
-        instruction: `${destinationName} ahead`,
-        distance: distanceInMeters,
-        direction: "straight"
-      };
-    } else if (distance < 0.2) { // Less than 200 meters
-      return {
-        instruction: `Continue to ${destinationName}`,
-        distance: distanceInMeters,
-        direction: "straight"
-      };
-    } else if (distance < 0.5) { // Less than 500 meters
-      return {
-        instruction: `Head toward ${destinationName}`,
-        distance: distanceInMeters,
-        direction: "straight"
-      };
-    } else if (distance < 1) { // Less than 1 km
-      return {
-        instruction: `Continue on current road`,
-        distance: distanceInMeters,
-        direction: "straight"
-      };
-    } else if (distance < 5) { // Less than 5 km
-      return {
-        instruction: `Continue straight`,
-        distance: distanceInMeters,
-        direction: "straight"
-      };
-    } else {
-      return {
-        instruction: `Continue on route`,
-        distance: distanceInMeters,
-        direction: "straight"
-      };
-    }
-  }, [currentRide]);
+  // Driving mode and voice navigation removed per request
 
   // Function to update driver location on server
   const updateDriverLocationOnServer = useCallback(async (location: Location) => {
@@ -235,20 +140,54 @@ const DriverDashboard: React.FC = () => {
       const previousRide = currentRide;
       const ride = await rideAPI.getCurrentRide();
       
-      // Check if we had a ride before and now it's gone (cancelled by rider)
+      // Check if we had a ride before and now it's gone
       if (previousRide && !ride) {
-        console.log('⚠️ Ride was cancelled by rider');
-        // Show a brief notification that ride was cancelled
-        setNewRideNotification(false); // Clear any existing notifications
-        setTimeout(() => {
-          console.log('📢 Ride cancelled - driver is now available for new rides');
-        }, 1000);
+        if (previousRide.status === 'IN_PROGRESS') {
+          // Treat disappearance during IN_PROGRESS as completion (fallback)
+          console.log('🏁 Ride disappeared after IN_PROGRESS - treating as completed (fallback)');
+          setShowCompletionPopup(true);
+          setCurrentRide(null);
+          return;
+        } else {
+          console.log('⚠️ Ride was cancelled by rider');
+          // Show a brief notification that ride was cancelled
+          setNewRideNotification(false); // Clear any existing notifications
+          setTimeout(() => {
+            console.log('📢 Ride cancelled - driver is now available for new rides');
+          }, 1000);
+        }
+      }
+      
+      // Check for ride completion
+      if (ride && ride.status === 'COMPLETED') {
+        console.log('🏁 Ride completed via loadCurrentRide - showing completion popup');
+        
+        // Clear current ride state first
+        setCurrentRide(null);
+        
+        // Show completion popup
+        setShowCompletionPopup(true);
+        
+        console.log('🎉 Completion popup shown, ride state cleared');
+        return; // Exit early to prevent setting completed ride in state
       }
       
       setCurrentRide(ride);
       console.log('📍 Current ride loaded:', ride);
+      if (ride?.status) {
+        previousRideStatusRef.current = ride.status;
+      }
     } catch (error) {
       console.error('Failed to load current ride:', error);
+    }
+  }, [currentRide]);
+
+  // Fallback completion popup if SSE missed (ride was IN_PROGRESS then disappears)
+  useEffect(() => {
+    if (previousRideStatusRef.current === 'IN_PROGRESS' && !currentRide) {
+      console.log('🏁 Ride completed (fallback detection) - showing completion popup');
+      setShowCompletionPopup(true);
+      previousRideStatusRef.current = null;
     }
   }, [currentRide]);
 
@@ -371,51 +310,7 @@ const DriverDashboard: React.FC = () => {
   const routeUpdateTimeoutRef = useRef<number | null>(null);
   const lastRouteUpdateRef = useRef<number>(0);
 
-  // Real-time navigation updates with voice guidance
-  useEffect(() => {
-    if (!isDrivingMode || !currentRide || !displayLocation) return;
-
-    const targetLat = currentRide.status === 'IN_PROGRESS' 
-      ? currentRide.destinationLatitude 
-      : currentRide.pickupLatitude;
-    const targetLng = currentRide.status === 'IN_PROGRESS' 
-      ? currentRide.destinationLongitude 
-      : currentRide.pickupLongitude;
-
-    if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {
-      const navInfo = generateNavigationInstruction(displayLocation, targetLat, targetLng);
-      
-      // Update navigation state
-      const previousInstruction = currentInstruction;
-      setCurrentInstruction(navInfo.instruction);
-      setDistanceToNextTurn(navInfo.distance);
-      setNextTurnDirection(navInfo.direction);
-
-      // Voice guidance logic - more frequent announcements
-      const shouldSpeak = 
-        navInfo.direction === 'arrived' || // Arrival
-        (navInfo.distance <= 50 && navInfo.distance > 0) || // Very close
-        (navInfo.distance <= 100 && navInfo.distance > 50) || // Close
-        (navInfo.distance <= 200 && navInfo.distance > 100) || // Approaching
-        (navInfo.distance <= 500 && navInfo.distance > 200 && navInfo.distance % 200 < 20) || // Every 200m when close
-        (navInfo.distance > 500 && navInfo.distance % 1000 < 50) || // Every 1km for longer distances
-        (previousInstruction !== navInfo.instruction && navInfo.distance < 1000); // Instruction changed
-
-      if (shouldSpeak) {
-        // Add distance context for voice
-        let voiceText = navInfo.instruction;
-        if (navInfo.distance > 0 && navInfo.direction !== 'arrived') {
-          if (navInfo.distance < 1000) {
-            voiceText = `In ${navInfo.distance} meters, ${navInfo.instruction.toLowerCase()}`;
-          } else {
-            voiceText = `In ${(navInfo.distance/1000).toFixed(1)} kilometers, ${navInfo.instruction.toLowerCase()}`;
-          }
-        }
-        
-        speakInstruction(voiceText);
-      }
-    }
-  }, [isDrivingMode, currentRide, displayLocation, generateNavigationInstruction, speakInstruction, currentInstruction]);
+  // Driving mode and voice navigation removed
 
     // 📍 Minimal location tracking (only for server updates)
   useEffect(() => {
@@ -480,21 +375,12 @@ const DriverDashboard: React.FC = () => {
         lastRouteCalculationRef.current = null;
         lastRouteUpdateRef.current = Date.now(); // Set initial timestamp
         
-        // Start with route view, then switch to driving mode after 10 seconds
-        setIsDrivingMode(false);
-        setRouteKey(`route-accepted-${rideId}-${Date.now()}`);
+  // Initialize route key for accepted ride
+  setRouteKey(`route-accepted-${rideId}-${Date.now()}`);
         
         console.log('🛣️ Initial route set for accepted ride');
         
-        // Switch to driving mode after 10 seconds
-        setTimeout(() => {
-          console.log('🚗 Switching to driving mode');
-          setIsDrivingMode(true);
-          
-          // Voice announcement for entering navigation mode
-          const destination = currentRide?.status === 'IN_PROGRESS' ? 'destination' : 'pickup location';
-          speakInstruction(`Navigation started. Driving to ${destination}.`);
-        }, 10000);
+        // Driving mode removed
         
         // Start driving to pickup after a delay
         setTimeout(async () => {
@@ -522,8 +408,7 @@ const DriverDashboard: React.FC = () => {
       await rideAPI.cancelRide(currentRide.id);
       console.log('✅ Ride cancelled successfully');
       
-      // Turn off driving mode when ride is cancelled
-      setIsDrivingMode(false);
+  // Driving mode removed
       
       // Reload current ride (should be null now) and available rides
       await loadCurrentRide();
@@ -546,17 +431,25 @@ const DriverDashboard: React.FC = () => {
     if (!currentRide) return;
 
     try {
+      console.log(`🔄 Updating ride status to: ${action}`);
       await rideAPI.updateRideStatus(currentRide.id, action);
+      console.log(`✅ Ride status updated successfully: ${action}`);
       
       if (action === 'complete') {
-        setCurrentRide(null);
-        // Turn off driving mode when ride is completed
-        setIsDrivingMode(false);
-      } else {
-        await loadCurrentRide();
+        console.log('🏁 Ride completion requested - waiting for backend confirmation via SSE');
+        // Don't show popup immediately - wait for SSE confirmation
+        // The completion popup will be shown when SSE receives COMPLETED status
       }
+      if (action === 'start_ride') {
+        // Force route recalculation to destination by bumping key
+        console.log('🚀 Trip started - forcing destination route recalculation');
+        setRouteKey(`route-destination-${Date.now()}`);
+      }
+      
+      // Always reload current ride to get updated status
+      await loadCurrentRide();
     } catch (error) {
-      console.error('Failed to update ride status:', error);
+      console.error('❌ Failed to update ride status:', error);
     }
   };
 
@@ -640,10 +533,31 @@ const DriverDashboard: React.FC = () => {
     const unsubscribe = subscribeRideEvents(currentRide.id, (ev: RideEvt) => {
       if (ev.type === 'STATUS' && ev.status) {
         setCurrentRide(prev => prev ? { ...prev, status: ev.status!, updatedAt: new Date().toISOString() } : prev);
+        
+        // Handle ride completion via SSE
+        if (ev.status === 'COMPLETED') {
+          console.log('🏁 Ride completed via SSE, showing completion popup');
+          
+          // Show completion popup (clearing handled by useEffect auto-close timer)
+          setShowCompletionPopup(true);
+        }
       }
     });
     return () => unsubscribe();
   }, [currentRide?.id]);
+
+  // Auto-close completion popup and clear fields after 5 seconds
+  useEffect(() => {
+    if (showCompletionPopup) {
+      const autoCloseTimer = setTimeout(() => {
+        console.log('⏰ Driver auto-closing completion popup after 10 seconds');
+        setShowCompletionPopup(false);
+        setCurrentRide(null);
+      }, 10000); // Changed from 5000 to 10000 (10 seconds)
+      
+      return () => clearTimeout(autoCloseTimer);
+    }
+  }, [showCompletionPopup]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -653,6 +567,22 @@ const DriverDashboard: React.FC = () => {
       }
     };
   }, []);
+
+  // Safety polling during active ride to ensure completion detection even if SSE missed
+  useEffect(() => {
+    if (!currentRide?.id) return;
+    const active = ['ACCEPTED', 'DRIVER_EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(currentRide.status);
+    if (!active) return;
+
+    console.log('🔄 Driver: starting safety ride-status polling every 7s during active ride');
+    const id = window.setInterval(() => {
+      loadCurrentRide();
+    }, 7000);
+    return () => {
+      clearInterval(id);
+      console.log('🛑 Driver: stopped safety ride-status polling');
+    };
+  }, [currentRide?.id, currentRide?.status, loadCurrentRide]);
 
   if (currentRide && currentRide.status !== 'COMPLETED') {
     const displayRide = transformRideForDisplay(currentRide);
@@ -672,220 +602,8 @@ const DriverDashboard: React.FC = () => {
         <Header title="Current Ride" />
         
         <div className="flex-1 relative overflow-hidden">
-          {isDrivingMode ? (
-            // Google Maps-style navigation mode
-            <div className="h-full bg-gray-100 relative">
-              {/* Top Navigation Direction Bar (like Google Maps) */}
-              <div className="absolute top-0 left-0 right-0 z-30 bg-white shadow-lg">
-                <div className="flex items-center justify-between p-3">
-                  {/* Main Direction Instruction */}
-                  <div className="flex items-center space-x-3 flex-1">
-                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                      {nextTurnDirection === 'arrived' ? '🏁' :
-                       nextTurnDirection === 'straight' ? '⬆️' :
-                       nextTurnDirection === 'left' ? '↰' :
-                       nextTurnDirection === 'right' ? '↱' : '⬆️'}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-lg font-semibold text-gray-900">
-                        {currentRide?.status === 'IN_PROGRESS' 
-                          ? (currentRide.destinationAddress?.split(',')[0] || 'Destination')
-                          : (currentRide.pickupAddress?.split(',')[0] || 'Pickup Location')}
-                      </div>
-                      {distanceToNextTurn > 0 && (
-                        <div className="text-sm text-gray-600">
-                          in {distanceToNextTurn > 1000 
-                            ? `${(distanceToNextTurn/1000).toFixed(1)} km` 
-                            : `${distanceToNextTurn} m`}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Voice toggle and exit */}
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setVoiceEnabled(!voiceEnabled)}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        voiceEnabled ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
-                      }`}
-                    >
-                      {voiceEnabled ? '🔊' : '🔇'}
-                    </button>
-                    <button
-                      onClick={() => setIsDrivingMode(false)}
-                      className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Map with maximum zoom like Google Maps */}
-              <div className="h-full pt-16">
-                {displayLocation && currentRide && 
-                 currentRide.pickupLatitude != null && 
-                 currentRide.pickupLongitude != null && 
-                 currentRide.destinationLatitude != null && 
-                 currentRide.destinationLongitude != null &&
-                 !isNaN(currentRide.pickupLatitude) && 
-                 !isNaN(currentRide.pickupLongitude) &&
-                 !isNaN(currentRide.destinationLatitude) && 
-                 !isNaN(currentRide.destinationLongitude) ? (
-                  <OpenStreetMap
-                    routeKey={mapRouteKey}
-                    center={displayLocation}
-                    zoom={21}  // Maximum possible zoom for street-level detail
-                    height="100%"
-                    markers={[
-                      displayLocation,
-                      {
-                        lat: currentRide.pickupLatitude,
-                        lng: currentRide.pickupLongitude,
-                        address: currentRide.pickupAddress || 'Pickup Location',
-                        isRiderWaiting: true
-                      },
-                      ...(currentRide.status === 'IN_PROGRESS' ? [{
-                        lat: currentRide.destinationLatitude,
-                        lng: currentRide.destinationLongitude,
-                        address: currentRide.destinationAddress || 'Destination'
-                      }] : [])
-                    ]}
-                    showDirections={true}
-                    destination={
-                      currentRide.status === 'IN_PROGRESS' ? {
-                        lat: currentRide.destinationLatitude,
-                        lng: currentRide.destinationLongitude,
-                        address: currentRide.destinationAddress || 'Destination'
-                      } : {
-                        lat: currentRide.pickupLatitude,
-                        lng: currentRide.pickupLongitude,
-                        address: currentRide.pickupAddress || 'Pickup Location'
-                      }
-                    }
-                    pickup={displayLocation}
-                    routingService="ors"
-                    followUser={true}
-                    navigationMode={true}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                    <div className="text-center text-gray-600">
-                      <div className="text-3xl mb-4">🗺️</div>
-                      <p className="text-lg font-medium">Loading Navigation...</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Bottom Left: Distance/Time Display (Google Maps style) */}
-                <div className="absolute bottom-20 left-4 z-30">
-                  <div className="bg-white rounded-lg shadow-lg px-3 py-2 min-w-[80px]">
-                    <div className="flex items-center space-x-3">
-                      {/* Distance remaining */}
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-900">
-                          {displayLocation && currentRide ? (
-                            currentRide.status === 'IN_PROGRESS' 
-                              ? Math.round(calculateDistance(
-                                  displayLocation.lat, displayLocation.lng,
-                                  currentRide.destinationLatitude, currentRide.destinationLongitude
-                                ) * 10) / 10
-                              : Math.round(calculateDistance(
-                                  displayLocation.lat, displayLocation.lng,
-                                  currentRide.pickupLatitude, currentRide.pickupLongitude
-                                ) * 10) / 10
-                          ) : '0'}
-                        </div>
-                        <div className="text-xs text-gray-500">km</div>
-                      </div>
-                      
-                      {/* Time estimate */}
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-900">
-                          {displayLocation && currentRide ? 
-                            Math.round((currentRide.status === 'IN_PROGRESS' 
-                              ? calculateDistance(
-                                  displayLocation.lat, displayLocation.lng,
-                                  currentRide.destinationLatitude, currentRide.destinationLongitude
-                                )
-                              : calculateDistance(
-                                  displayLocation.lat, displayLocation.lng,
-                                  currentRide.pickupLatitude, currentRide.pickupLongitude
-                                )) * 2) // Rough time estimate: 2 min per km in city
-                            : '0'}
-                        </div>
-                        <div className="text-xs text-gray-500">min</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Passenger Bar (minimal) */}
-              <div className="absolute bottom-0 left-0 right-0 z-30 bg-white border-t shadow-lg">
-                <div className="flex items-center justify-between p-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {currentRide.riderUsername || `Rider ${currentRide.riderId}`}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {currentRide.status === 'IN_PROGRESS' ? 'In vehicle' : 'Waiting'}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    {/* Call button */}
-                    <button 
-                      className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center hover:bg-green-700"
-                      onClick={() => {
-                        if (currentRide.riderPhone) {
-                          window.open(`tel:${currentRide.riderPhone}`, '_self');
-                        }
-                      }}
-                    >
-                      <Phone className="h-4 w-4" />
-                    </button>
-                    
-                    {/* Main action button */}
-                    {currentRide.status === 'DRIVER_EN_ROUTE' && (
-                      <button
-                        onClick={() => handleUpdateRideStatus('arrived_at_pickup')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-                      >
-                        Arrived
-                      </button>
-                    )}
-                    
-                    {currentRide.status === 'ARRIVED' && (
-                      <button
-                        onClick={() => handleUpdateRideStatus('start_ride')}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
-                      >
-                        Start Trip
-                      </button>
-                    )}
-                    
-                    {currentRide.status === 'IN_PROGRESS' && (
-                      <button
-                        onClick={() => handleUpdateRideStatus('complete')}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
-                      >
-                        End Trip
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            // Regular map view
-            <>
+          {/* Regular map view */}
+          <>
               {displayLocation && currentRide && 
                currentRide.pickupLatitude != null && 
                currentRide.pickupLongitude != null && 
@@ -900,6 +618,7 @@ const DriverDashboard: React.FC = () => {
                   center={displayLocation}  // Center on driver location
                   zoom={16}
                   height="100%"
+                  rideStatus={currentRide.status}
                   markers={[
                     displayLocation,
                     {
@@ -937,7 +656,8 @@ const DriverDashboard: React.FC = () => {
                     }
                   }
                   pickup={displayLocation}  // Driver's current location
-                  routingService="ors"
+                  routingService="osrm"
+                  driverLocation={displayLocation}
                 />
               ) : (
                 <div className="w-full h-full bg-gray-200 flex items-center justify-center">
@@ -956,11 +676,9 @@ const DriverDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
-            </>
-          )}
+          </>
 
-          {/* Bottom Panel for Current Ride - Only show in map view */}
-          {!isDrivingMode && (
+          {/* Bottom Panel for Current Ride */}
             <div className="absolute bottom-0 left-0 right-0 z-10 md:top-16 md:left-4 md:right-auto md:bottom-8 md:w-80">
               <div className="px-3 md:px-0 pb-3">
                 <div className="bg-white rounded-t-xl md:rounded-xl shadow-xl border border-gray-200">
@@ -1079,7 +797,6 @@ const DriverDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
-          )}
         </div>
       </div>
     );
@@ -1097,6 +814,31 @@ const DriverDashboard: React.FC = () => {
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-white rounded-full"></div>
             <span className="font-medium">New ride request available!</span>
+          </div>
+        </div>
+      )}
+
+      {/* Ride Completion Popup */}
+      {showCompletionPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Ride Completed!</h2>
+              <p className="text-gray-600 mb-6">
+                Great job! The ride has been completed successfully. You're now available for new rides.
+              </p>
+              <button
+                onClick={() => {
+                  console.log('🔄 Driver manually closed completion popup, clearing ride data');
+                  setShowCompletionPopup(false);
+                  setCurrentRide(null);
+                }}
+                className="w-full bg-green-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-green-700 transition-colors duration-200"
+              >
+                Continue Driving
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1124,7 +866,7 @@ const DriverDashboard: React.FC = () => {
                 }))
             ]}
             waitingForDriver={true}  // Enable radiation effect for waiting riders
-            routingService="ors"
+            routingService="osrm"
           />
         ) : (
           <div className="w-full h-full bg-gray-200 flex items-center justify-center">

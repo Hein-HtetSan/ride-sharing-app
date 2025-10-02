@@ -8,6 +8,8 @@ interface RouteResponse {
 }
 
 class RoutingService {
+  // In-memory simple route cache
+  private static _routeCache: Map<string, { ts: number; data: RouteResponse }> | null = null;
   // Using OpenRouteService (free API with 2000 requests/day)
   private static readonly ORS_API_KEY = import.meta.env.VITE_ORS_API_KEY;
   private static readonly ORS_BASE_URL = 'https://api.openrouteservice.org/v2/directions/driving-car';
@@ -31,35 +33,46 @@ class RoutingService {
   }
 
   /**
-   * Get route between two points using OpenRouteService with OSRM fallback
+   * Get route between two points using ONLY OSRM (no fallbacks)
    */
   static async getRoute(start: Location, end: Location): Promise<RouteResponse> {
-    try {
-      // Try OpenRouteService first
-      if (this.ORS_API_KEY) {
-        console.log('🗺️ Attempting ORS routing...');
-        return await this.getRouteFromORS(start, end);
-      } else {
-        console.warn('⚠️ ORS API key not configured, trying OSRM...');
-        return await this.getRouteFromOSRM(start, end);
-      }
-    } catch (orsError) {
-      console.warn('⚠️ ORS routing failed, trying OSRM fallback:', orsError);
-      
-      try {
-        console.log('🗺️ Attempting OSRM fallback routing...');
-        return await this.getRouteFromOSRM(start, end);
-      } catch (osrmError) {
-        console.warn('⚠️ OSRM routing also failed, using straight line fallback:', osrmError);
-        
-        // Check if it's a network connectivity issue
-        if (orsError instanceof TypeError && orsError.message.includes('Failed to fetch')) {
-          console.warn('🌐 Network connectivity issue detected. External routing APIs might be blocked.');
-        }
-        
-        return this.getStraightLineRoute(start, end);
-      }
+    console.log('🗺️ Using OSRM routing only (no fallbacks)');
+    return await this.getRouteFromOSRM(start, end);
+  }
+
+  /**
+   * Update location pin on existing route without recalculating the entire route
+   * This is used for live tracking to avoid continuous API calls
+   */
+  static updateLocationOnRoute(
+    currentRoute: [number, number][], 
+    newLocation: Location
+  ): [number, number][] {
+    if (!currentRoute || currentRoute.length === 0) {
+      return [[newLocation.lat, newLocation.lng]];
     }
+
+    // Find the closest point on the route to the new location
+    let closestIndex = 0;
+    let minDistance = Number.MAX_VALUE;
+
+    currentRoute.forEach((point, index) => {
+      const distance = this.calculateHaversineDistance(
+        { lat: point[0], lng: point[1], address: '' },
+        newLocation
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+
+    // Create new route with updated location
+    const updatedRoute = [...currentRoute];
+    updatedRoute[closestIndex] = [newLocation.lat, newLocation.lng];
+
+    console.log('📍 Updated location pin on existing route without API call');
+    return updatedRoute;
   }
 
   /**
@@ -73,7 +86,7 @@ class RoutingService {
     try {
       // Add timeout and better error handling
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
       
       const response = await fetch(url, {
         headers: {
@@ -122,7 +135,7 @@ class RoutingService {
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          throw new Error('ORS API request timed out after 10 seconds');
+          throw new Error('ORS API request timed out after 25 seconds');
         }
         throw error;
       }
@@ -134,65 +147,74 @@ class RoutingService {
    * OSRM routing (free, no API key required)
    */
   private static async getRouteFromOSRM(start: Location, end: Location): Promise<RouteResponse> {
-  const url = `${this.osrmBase}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
-    
-    console.log('📡 OSRM API Request:', url);
-    
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-      
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'RideWithUs/1.0'
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ OSRM API HTTP Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        throw new Error(`OSRM API error: ${response.status} - ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ OSRM API Response received:', data);
-      
-      if (!data.routes || !data.routes[0]) {
-        throw new Error('No route found in OSRM response');
-      }
-      
-      const route = data.routes[0];
-      const coordinates = route.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
-      
-      const result = {
-        coordinates,
-        distance: route.distance / 1000, // Convert to km
-        duration: route.duration, // Already in seconds
-      };
-      
-      console.log('🎯 OSRM Route calculated:', {
-        distance: `${result.distance.toFixed(2)} km`,
-        duration: `${Math.round(result.duration / 60)} min`,
-        points: coordinates.length
-      });
-      
-      return result;
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new Error('OSRM API request timed out after 8 seconds');
-        }
-        throw error;
-      }
-      throw new Error('Unknown error occurred while fetching route from OSRM');
+    // Validate coordinates early
+    const isValidCoord = (v: number) => typeof v === 'number' && isFinite(v) && Math.abs(v) > 0.000001;
+    if (!isValidCoord(start.lat) || !isValidCoord(start.lng) || !isValidCoord(end.lat) || !isValidCoord(end.lng)) {
+      console.warn('⚠️ Invalid coordinates supplied to OSRM. Falling back to straight line.', { start, end });
+      return this.getStraightLineRoute(start, end);
     }
+
+    // Deterministic cache key (rounded to 5 decimals to avoid noise)
+    const key = `${start.lat.toFixed(5)},${start.lng.toFixed(5)}->${end.lat.toFixed(5)},${end.lng.toFixed(5)}`;
+    if (!this._routeCache) this._routeCache = new Map<string, { ts: number; data: RouteResponse }>();
+    const CACHE_TTL_MS = 1000 * 60; // 1 minute reuse for identical route
+    const cached = this._routeCache.get(key);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      console.log('🗃️ Using cached OSRM route:', key);
+      return cached.data;
+    }
+
+    const url = `${this.osrmBase}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+    console.log('📡 OSRM API Request:', url, 'key:', key);
+
+    const attemptFetch = async (attempt: number): Promise<RouteResponse> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'RideWithUs/1.0' },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(`HTTP ${response.status} ${response.statusText} body=${body.slice(0,200)}`);
+        }
+        const data = await response.json();
+        if (!data.routes || !data.routes[0]) throw new Error('No route in OSRM response');
+        const route = data.routes[0];
+        const coordinates = route.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
+        const result: RouteResponse = {
+          coordinates,
+          distance: route.distance / 1000,
+          duration: route.duration
+        };
+  // _routeCache guaranteed initialized earlier
+  this._routeCache!.set(key, { ts: Date.now(), data: result });
+        console.log(`🎯 OSRM Route calculated (attempt ${attempt}):`, {
+          distance: `${result.distance.toFixed(2)} km`,
+            duration: `${Math.round(result.duration / 60)} min`,
+            points: coordinates.length
+        });
+        return result;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (e instanceof Error && e.name === 'AbortError') {
+          console.warn(`⏱️ OSRM timeout on attempt ${attempt}`);
+        } else {
+          console.warn(`⚠️ OSRM fetch failed on attempt ${attempt}:`, e);
+        }
+        if (attempt < 2) { // total 3 attempts
+          const backoff = 300 * attempt; // simple linear backoff
+            await new Promise(res => setTimeout(res, backoff));
+          return attemptFetch(attempt + 1);
+        }
+        console.error('❌ OSRM routing failed after retries. Falling back to straight line.');
+        return this.getStraightLineRoute(start, end);
+      }
+    };
+
+    return attemptFetch(1);
   }
 
   /**

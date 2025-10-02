@@ -19,6 +19,7 @@ interface OpenStreetMapProps {
   routeKey?: string; // Key to control route recalculation
   followUser?: boolean; // Enable following user for navigation mode
   navigationMode?: boolean; // Enable navigation-specific styling and behavior
+  rideStatus?: string; // Ride lifecycle status to influence routing logic
 }
 
 const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
@@ -37,12 +38,17 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   driverInfo,
   routeKey,
   followUser = false,
-  navigationMode = false
+  navigationMode = false,
+  rideStatus
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<unknown>(null);
   const markersRef = useRef<unknown[]>([]);
   const routeLayer = useRef<unknown>(null);
+  const [currentRouteCoordinates, setCurrentRouteCoordinates] = useState<[number, number][]>([]);
+  const [routeError, setRouteError] = useState<string>('');
+  const routeInflightRef = useRef<boolean>(false);
+  const debounceTimerRef = useRef<number | null>(null);
   
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string>('');
@@ -249,35 +255,29 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       const isRiderWaiting = markerLocation.isRiderWaiting || false; // Check if this is a waiting rider
       const isDriverLocation = (markerLocation as any).isDriverLocation || false; // Check if this is driver location
       
-      let markerType, markerColor, markerEmoji, markerTitle;
+  let markerColor, markerEmoji, markerTitle; // removed unused markerType
       
       if (isDriverLocation) {
-        markerType = 'DRIVER';
         markerColor = '#f59e0b'; // Amber/Orange
         markerEmoji = '🚖';
         markerTitle = driverInfo ? `Driver: ${driverInfo.username}` : 'Your Driver';
       } else if (isCurrentLocation && !isPickupLocation) {
-        markerType = 'CURRENT';
         markerColor = navigationMode ? '#3b82f6' : '#22c55e'; // Blue in navigation mode, green otherwise
         markerEmoji = navigationMode ? '🧭' : '📍';
         markerTitle = navigationMode ? 'You are here (Navigation)' : 'Current Location';
       } else if (isPickupLocation) {
-        markerType = 'PICKUP';
         markerColor = '#3b82f6'; // Blue
         markerEmoji = '🚗';
         markerTitle = 'Pickup Location';
       } else if (isDestinationLocation) {
-        markerType = 'DESTINATION';
         markerColor = '#ef4444'; // Red
         markerEmoji = '🎯';
         markerTitle = 'Destination';
       } else if (isRiderWaiting) {
-        markerType = 'RIDER_WAITING';
         markerColor = '#f59e0b'; // Orange/yellow for waiting riders
         markerEmoji = '🙋‍♂️';
         markerTitle = 'Rider Waiting';
       } else {
-        markerType = 'OTHER';
         markerColor = '#6b7280'; // Gray
         markerEmoji = '📌';
         markerTitle = 'Location';
@@ -390,22 +390,74 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   }, [markers, center, pickup, destination, driverAccepted, waitingForDriver, driverLocation, driverInfo]);
 
   // Handle directions
+  const lastEndpointsRef = useRef<string>('');
   useEffect(() => {
     if (!mapInstance.current || !showDirections || !destination) {
       if (routeLayer.current) {
         (mapInstance.current as any).removeLayer(routeLayer.current);
         routeLayer.current = null;
       }
+      setRouteError('');
       return;
     }
 
     const drawRoute = async () => {
+      if (routeInflightRef.current) {
+        // Prevent overlapping OSRM calls
+        return;
+      }
+      routeInflightRef.current = true;
       try {
         const L = (window as any).L;
         // Use pickup location if provided, otherwise use first marker or center
-        const start = pickup || (markers.length > 0 ? markers[0] : center);
+        // Determine start point: while en route to pickup use driver->pickup, once IN_PROGRESS prefer driver's current location if provided
+        let start = pickup || (markers.length > 0 ? markers[0] : center);
+        if (rideStatus === 'IN_PROGRESS' && driverLocation) {
+          start = driverLocation; // Start leg to destination from live driver position
+        }
         
-        const routeResult = await RoutingService.getRoute(start, destination);
+        // Check if we can use pin update instead of full route calculation
+        // Only update pins if we have an existing route AND only the driver location changed
+  const canUpdatePin = currentRouteCoordinates.length > 0 &&
+            driverLocation &&
+            pickup &&
+            destination &&
+            rideStatus !== 'IN_PROGRESS' && // force full recalculation once ride in progress
+            (start.lat === pickup.lat && start.lng === pickup.lng);
+        
+        if (canUpdatePin) {
+          console.log('📍 Updating driver pin on existing route without API call');
+          const updatedCoordinates = RoutingService.updateLocationOnRoute(currentRouteCoordinates, driverLocation);
+          
+          // Update the route layer with new coordinates
+          if (routeLayer.current) {
+            (mapInstance.current as any).removeLayer(routeLayer.current);
+          }
+          
+          routeLayer.current = L.polyline(updatedCoordinates, {
+            color: '#3b82f6',
+            weight: 4,
+            opacity: 0.8
+          }).addTo(mapInstance.current);
+          
+          setCurrentRouteCoordinates(updatedCoordinates);
+          return;
+        }
+        
+        // Detect endpoint change (e.g., pickup->destination transition)
+        const endpointSignature = `${start.lat.toFixed(5)},${start.lng.toFixed(5)}->${destination.lat.toFixed(5)},${destination.lng.toFixed(5)}|status=${rideStatus}`;
+        const endpointsChanged = endpointSignature !== lastEndpointsRef.current;
+        if (endpointsChanged) {
+          console.log('🔁 Endpoint change detected, forcing full route recalculation (FORCED_DESTINATION_RECALC if status IN_PROGRESS):', endpointSignature);
+          lastEndpointsRef.current = endpointSignature;
+          // Clear previous stored route to avoid pin-only update
+          setCurrentRouteCoordinates([]);
+        }
+
+        // Full route calculation for new routes or when endpoints changed
+  console.log('🗺️ Calculating new route with OSRM API (debounced)');
+  setRouteError('');
+  const routeResult = await RoutingService.getRoute(start, destination);
         
         if (routeResult && routeResult.coordinates.length > 0) {
           // Remove existing route
@@ -419,6 +471,9 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             weight: 4,
             opacity: 0.8
           }).addTo(mapInstance.current);
+          
+          // Store coordinates for future pin updates
+          setCurrentRouteCoordinates(routeResult.coordinates);
 
           // Fit map to show the entire route
           const group = L.featureGroup([
@@ -430,11 +485,26 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         }
       } catch (error) {
         console.error('Failed to calculate route:', error);
+        setRouteError(error instanceof Error ? error.message : 'Route calculation failed');
+      } finally {
+        routeInflightRef.current = false;
       }
     };
+    // Debounce: wait 250ms for rapid prop changes (e.g., driverLocation updates) before deciding full recalculation
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = window.setTimeout(() => {
+      drawRoute();
+    }, 250);
+  }, [showDirections, destination, pickup, markers, routingService, center, driverLocation, currentRouteCoordinates, routeKey, rideStatus]);
 
-    drawRoute();
-  }, [showDirections, destination, pickup, markers, routingService, center]);
+  // Small floating error notice (driver / rider view)
+  const routeErrorBanner = routeError ? (
+    <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 bg-red-600 text-white text-xs px-3 py-1 rounded shadow">
+      Route issue: {routeError}
+    </div>
+  ) : null;
 
   // Error state
   if (error) {
@@ -491,6 +561,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       style={{ height, width: '100%', borderRadius: '8px', overflow: 'hidden' }}
       className="relative"
     >
+      {routeErrorBanner}
       <style>{`
         @keyframes pulse {
           0% { transform: scale(1); opacity: 1; }

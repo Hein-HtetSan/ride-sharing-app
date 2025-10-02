@@ -16,7 +16,7 @@ interface OpenStreetMapContextProps {
 const OpenStreetMapContext = createContext<OpenStreetMapContextProps>({
   isLoaded: false,
   loadError: false,
-  routingService: 'ors'
+  routingService: 'osrm'
 });
 
 export const useOpenStreetMap = () => useContext(OpenStreetMapContext);
@@ -28,7 +28,7 @@ interface OpenStreetMapProviderProps {
 
 export const OpenStreetMapProvider: React.FC<OpenStreetMapProviderProps> = ({ 
   children, 
-  routingService = 'ors'
+  routingService = 'osrm'
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
